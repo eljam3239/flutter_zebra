@@ -1,16 +1,13 @@
 # flutter_zebra
 
-A new Flutter project.
+Flutter wrapper for Zebra's iOS and Android link-OS sdks.
 
 ## Getting Started
+1. Download the iOS and Android Link-OS Multiplatform SDKs [here](https://www.zebra.com/us/en/support-downloads/software/printer-software/link-os-multiplatform-sdk.html)
+2. Add the blah blah file to 
 
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Supported
+| Device | ZD421 |
+| -------|-------|
+| iOS    |       |
+| Android|       |

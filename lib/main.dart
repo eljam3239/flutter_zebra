@@ -7,46 +7,20 @@ void main() {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'Zebra Printer Demo',
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const MyHomePage(title: 'Zebra Printer Demo'),
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
   final String title;
 
   @override
@@ -54,69 +28,223 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+  List<String> _discoveredPrinters = [];
+  bool _isConnected = false;
+  String _printerStatus = 'Unknown';
+  String? _selectedPrinter;
+  bool _isDiscovering = false;
 
-  void _incrementCounter() {
+  Future<void> _discoverPrinters() async {
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      _isDiscovering = true;
     });
+
+    // TODO: Implement actual printer discovery
+    // For now, simulate discovery with placeholder printers
+    await Future.delayed(const Duration(seconds: 2));
+    
+    setState(() {
+      _discoveredPrinters = [
+        'TCP:ZebraPrinter1',
+        'BT:ZebraPrinter2',
+        'USB:ZebraPrinter3',
+      ];
+      _selectedPrinter = _discoveredPrinters.isNotEmpty ? _discoveredPrinters.first : null;
+      _isDiscovering = false;
+    });
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Found ${_discoveredPrinters.length} printers')),
+    );
+  }
+
+  Future<void> _connectToPrinter() async {
+    if (_selectedPrinter == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a printer first.')),
+      );
+      return;
+    }
+
+    // TODO: Implement actual printer connection
+    await Future.delayed(const Duration(seconds: 1));
+    
+    setState(() {
+      _isConnected = true;
+      _printerStatus = 'Connected';
+    });
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Connected to: ${_selectedPrinter!.split(':').last}')),
+    );
+  }
+
+  Future<void> _disconnectFromPrinter() async {
+    // TODO: Implement actual printer disconnection
+    await Future.delayed(const Duration(milliseconds: 500));
+    
+    setState(() {
+      _isConnected = false;
+      _printerStatus = 'Disconnected';
+    });
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Disconnected from printer')),
+    );
+  }
+
+  Future<void> _printReceipt() async {
+    if (!_isConnected) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please connect to a printer first')),
+      );
+      return;
+    }
+
+    // TODO: Implement actual receipt printing
+    await Future.delayed(const Duration(seconds: 1));
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Receipt print job sent successfully')),
+    );
+  }
+
+  Future<void> _printLabel() async {
+    if (!_isConnected) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please connect to a printer first')),
+      );
+      return;
+    }
+
+    // TODO: Implement actual label printing
+    await Future.delayed(const Duration(seconds: 1));
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Label print job sent successfully')),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
         title: Text(widget.title),
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
         child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text('Zebra Printer Controls', style: Theme.of(context).textTheme.headlineSmall),
+                    const SizedBox(height: 16),
+                    Text('Discovered Printers: ${_discoveredPrinters.length}'),
+                    if (_discoveredPrinters.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      const Text('Select Printer:', style: TextStyle(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _selectedPrinter,
+                            hint: const Text('Select a printer'),
+                            isExpanded: true,
+                            items: _discoveredPrinters.map((printer) {
+                              final parts = printer.split(':');
+                              final model = parts.length > 2 ? parts[2] : 'Unknown';
+                              final address = parts.length > 1 ? parts[1] : 'Unknown';
+                              final displayAddress = address.length > 8 ? '${address.substring(0, 8)}...' : address;
+                              return DropdownMenuItem<String>(
+                                value: printer,
+                                child: Text('$model ($displayAddress)'),
+                              );
+                            }).toList(),
+                            onChanged: (String? newValue) {
+                              setState(() {
+                                _selectedPrinter = newValue;
+                                _isConnected = false;
+                                _printerStatus = 'Unknown';
+                              });
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      if (_selectedPrinter != null)
+                        Text('Selected: ${_selectedPrinter!}', style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic)),
+                    ],
+                    const SizedBox(height: 16),
+                    Text('Connection Status: ${_isConnected ? "Connected" : "Disconnected"}'),
+                    const SizedBox(height: 8),
+                    Text('Printer Status: $_printerStatus'),
+                    const SizedBox(height: 16),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: <Widget>[
+                        ElevatedButton(
+                          onPressed: _isDiscovering ? null : _discoverPrinters,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: _isDiscovering 
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                ),
+                              )
+                            : const Text('Discover Printers'),
+                        ),
+                        ElevatedButton(
+                          onPressed: _selectedPrinter != null && !_isConnected ? _connectToPrinter : null,
+                          child: const Text('Connect'),
+                        ),
+                        ElevatedButton(
+                          onPressed: _isConnected ? _disconnectFromPrinter : null,
+                          child: const Text('Disconnect'),
+                        ),
+                        ElevatedButton(
+                          onPressed: _isConnected ? _printReceipt : null,
+                          child: const Text('Print Receipt'),
+                        ),
+                        ElevatedButton(
+                          onPressed: _isConnected ? _printLabel : null,
+                          child: const Text('Print Label'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
 }
