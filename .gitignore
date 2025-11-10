@@ -47,3 +47,6 @@ app.*.map.json
 
 # whole sdks
 /sdks
+
+# iOS Zebra SDK xcframework
+packages/zebra_printer_ios/ios/frameworks/xcframework
