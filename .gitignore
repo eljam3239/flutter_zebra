@@ -49,4 +49,4 @@ app.*.map.json
 /sdks
 
 # iOS Zebra SDK xcframework
-packages/zebra_printer_ios/ios/frameworks/xcframework
+packages/zebra_printer_ios/ios/Frameworks

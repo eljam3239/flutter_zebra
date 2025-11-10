@@ -1,0 +1,22 @@
+PODS:
+  - Flutter (1.0.0)
+  - zebra_printer_ios (0.0.1):
+    - Flutter
+
+DEPENDENCIES:
+  - Flutter (from `Flutter`)
+  - zebra_printer_ios (from `.symlinks/plugins/zebra_printer_ios/ios`)
+
+EXTERNAL SOURCES:
+  Flutter:
+    :path: Flutter
+  zebra_printer_ios:
+    :path: ".symlinks/plugins/zebra_printer_ios/ios"
+
+SPEC CHECKSUMS:
+  Flutter: e0871f40cf51350855a761d2e70bf5af5b9b5de7
+  zebra_printer_ios: 9067fe0176d21f46d615c2d53014e563888983fe
+
+PODFILE CHECKSUM: 53a6aebc29ccee84c41f92f409fc20cd4ca011f1
+
+COCOAPODS: 1.16.2

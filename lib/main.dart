@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:zebra_printer/zebra_printer.dart';
 
 void main() {
   runApp(const MyApp());
@@ -28,10 +29,10 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  List<String> _discoveredPrinters = [];
+  List<DiscoveredPrinter> _discoveredPrinters = [];
   bool _isConnected = false;
   String _printerStatus = 'Unknown';
-  String? _selectedPrinter;
+  DiscoveredPrinter? _selectedPrinter;
   bool _isDiscovering = false;
 
   Future<void> _discoverPrinters() async {
@@ -39,24 +40,30 @@ class _MyHomePageState extends State<MyHomePage> {
       _isDiscovering = true;
     });
 
-    // TODO: Implement actual printer discovery
-    // For now, simulate discovery with placeholder printers
-    await Future.delayed(const Duration(seconds: 2));
-    
-    setState(() {
-      _discoveredPrinters = [
-        'TCP:ZebraPrinter1',
-        'BT:ZebraPrinter2',
-        'USB:ZebraPrinter3',
-      ];
-      _selectedPrinter = _discoveredPrinters.isNotEmpty ? _discoveredPrinters.first : null;
-      _isDiscovering = false;
-    });
+    try {
+      // Use actual Zebra printer discovery
+      final printers = await ZebraPrinter.discoverPrinters();
+      
+      setState(() {
+        _discoveredPrinters = printers;
+        _selectedPrinter = _discoveredPrinters.isNotEmpty ? _discoveredPrinters.first : null;
+        _isDiscovering = false;
+      });
 
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Found ${_discoveredPrinters.length} printers')),
-    );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Found ${_discoveredPrinters.length} printers')),
+      );
+    } catch (e) {
+      setState(() {
+        _isDiscovering = false;
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Discovery failed: $e')),
+      );
+    }
   }
 
   Future<void> _connectToPrinter() async {
@@ -68,33 +75,56 @@ class _MyHomePageState extends State<MyHomePage> {
       return;
     }
 
-    // TODO: Implement actual printer connection
-    await Future.delayed(const Duration(seconds: 1));
-    
-    setState(() {
-      _isConnected = true;
-      _printerStatus = 'Connected';
-    });
+    try {
+      // Create connection settings based on the selected printer
+      final settings = ZebraConnectionSettings(
+        interfaceType: ZebraInterfaceType.tcp,
+        identifier: _selectedPrinter!.address,
+        timeout: 15000,
+      );
 
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Connected to: ${_selectedPrinter!.split(':').last}')),
-    );
+      await ZebraPrinter.connect(settings);
+      
+      setState(() {
+        _isConnected = true;
+        _printerStatus = 'Connected';
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Connected to: ${_selectedPrinter!.friendlyName ?? _selectedPrinter!.address}')),
+      );
+    } catch (e) {
+      setState(() {
+        _isConnected = false;
+        _printerStatus = 'Connection Failed';
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Connection failed: $e')),
+      );
+    }
   }
 
   Future<void> _disconnectFromPrinter() async {
-    // TODO: Implement actual printer disconnection
-    await Future.delayed(const Duration(milliseconds: 500));
-    
-    setState(() {
-      _isConnected = false;
-      _printerStatus = 'Disconnected';
-    });
+    try {
+      await ZebraPrinter.disconnect();
+      setState(() {
+        _isConnected = false;
+        _printerStatus = 'Disconnected';
+      });
 
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Disconnected from printer')),
-    );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Disconnected from printer')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Disconnect failed: $e')),
+      );
+    }
   }
 
   Future<void> _printReceipt() async {
@@ -106,13 +136,27 @@ class _MyHomePageState extends State<MyHomePage> {
       return;
     }
 
-    // TODO: Implement actual receipt printing
-    await Future.delayed(const Duration(seconds: 1));
+    try {
+      // Create a simple ZPL test label
+      const zplTestLabel = '^XA^FO20,20^A0N,25,25^FDZebra Test Print^FS^XZ';
+      
+      final printJob = PrintJob(
+        content: zplTestLabel,
+        language: ZebraPrintLanguage.zpl,
+      );
 
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Receipt print job sent successfully')),
-    );
+      await ZebraPrinter.printReceipt(printJob);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Test label sent successfully')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Print failed: $e')),
+      );
+    }
   }
 
   Future<void> _printLabel() async {
@@ -124,13 +168,27 @@ class _MyHomePageState extends State<MyHomePage> {
       return;
     }
 
-    // TODO: Implement actual label printing
-    await Future.delayed(const Duration(seconds: 1));
+    try {
+      // Create a simple ZPL label with border
+      const zplLabel = '^XA^FO17,16^GB379,371,8^FS^FT65,255^A0N,135,134^FDTEST LABEL^FS^XZ';
+      
+      final printJob = PrintJob(
+        content: zplLabel,
+        language: ZebraPrintLanguage.zpl,
+      );
 
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Label print job sent successfully')),
-    );
+      await ZebraPrinter.printReceipt(printJob);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Label sent successfully')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Label print failed: $e')),
+      );
+    }
   }
 
   @override
@@ -166,21 +224,23 @@ class _MyHomePageState extends State<MyHomePage> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
+                          child: DropdownButton<DiscoveredPrinter>(
                             value: _selectedPrinter,
                             hint: const Text('Select a printer'),
                             isExpanded: true,
                             items: _discoveredPrinters.map((printer) {
-                              final parts = printer.split(':');
-                              final model = parts.length > 2 ? parts[2] : 'Unknown';
-                              final address = parts.length > 1 ? parts[1] : 'Unknown';
-                              final displayAddress = address.length > 8 ? '${address.substring(0, 8)}...' : address;
-                              return DropdownMenuItem<String>(
+                              final displayName = printer.friendlyName?.isNotEmpty == true 
+                                  ? printer.friendlyName!
+                                  : 'Zebra Printer';
+                              final displayAddress = printer.address.length > 15 
+                                  ? '${printer.address.substring(0, 15)}...'
+                                  : printer.address;
+                              return DropdownMenuItem<DiscoveredPrinter>(
                                 value: printer,
-                                child: Text('$model ($displayAddress)'),
+                                child: Text('$displayName ($displayAddress)'),
                               );
                             }).toList(),
-                            onChanged: (String? newValue) {
+                            onChanged: (DiscoveredPrinter? newValue) {
                               setState(() {
                                 _selectedPrinter = newValue;
                                 _isConnected = false;
@@ -192,7 +252,8 @@ class _MyHomePageState extends State<MyHomePage> {
                       ),
                       const SizedBox(height: 8),
                       if (_selectedPrinter != null)
-                        Text('Selected: ${_selectedPrinter!}', style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic)),
+                        Text('Selected: ${_selectedPrinter!.address} (Port: ${_selectedPrinter!.port})', 
+                             style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic)),
                     ],
                     const SizedBox(height: 16),
                     Text('Connection Status: ${_isConnected ? "Connected" : "Disconnected"}'),
