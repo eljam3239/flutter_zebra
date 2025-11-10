@@ -10,21 +10,48 @@ class MethodChannelZebraPrinter extends ZebraPrinterPlatform {
   final methodChannel = const MethodChannel('zebra_printer');
 
   @override
-  Future<List<String>> discoverPrinters() async {
+  Future<List<DiscoveredPrinter>> discoverPrinters() async {
     final result = await methodChannel.invokeMethod<List<dynamic>>('discoverPrinters');
-    return result?.cast<String>() ?? [];
+    return result?.map((item) => DiscoveredPrinter.fromMap(item.cast<String, dynamic>())).toList() ?? [];
   }
 
   @override
-  Future<List<String>> discoverBluetoothPrinters() async {
+  Future<List<DiscoveredPrinter>> discoverMulticastPrinters({int hops = 3, int? timeoutMs}) async {
+    final result = await methodChannel.invokeMethod<List<dynamic>>('discoverMulticastPrinters', {
+      'hops': hops,
+      'timeoutMs': timeoutMs,
+    });
+    return result?.map((item) => DiscoveredPrinter.fromMap(item.cast<String, dynamic>())).toList() ?? [];
+  }
+
+  @override
+  Future<List<DiscoveredPrinter>> discoverDirectedBroadcast(String ipAddress, {int? timeoutMs}) async {
+    final result = await methodChannel.invokeMethod<List<dynamic>>('discoverDirectedBroadcast', {
+      'ipAddress': ipAddress,
+      'timeoutMs': timeoutMs,
+    });
+    return result?.map((item) => DiscoveredPrinter.fromMap(item.cast<String, dynamic>())).toList() ?? [];
+  }
+
+  @override
+  Future<List<DiscoveredPrinter>> discoverSubnetSearch(String subnetRange, {int? timeoutMs}) async {
+    final result = await methodChannel.invokeMethod<List<dynamic>>('discoverSubnetSearch', {
+      'subnetRange': subnetRange,
+      'timeoutMs': timeoutMs,
+    });
+    return result?.map((item) => DiscoveredPrinter.fromMap(item.cast<String, dynamic>())).toList() ?? [];
+  }
+
+  @override
+  Future<List<DiscoveredPrinter>> discoverBluetoothPrinters() async {
     final result = await methodChannel.invokeMethod<List<dynamic>>('discoverBluetoothPrinters');
-    return result?.cast<String>() ?? [];
+    return result?.map((item) => DiscoveredPrinter.fromMap(item.cast<String, dynamic>())).toList() ?? [];
   }
 
   @override
-  Future<Map<String, dynamic>> usbDiagnostics() async {
-    final result = await methodChannel.invokeMethod<Map<dynamic, dynamic>>('usbDiagnostics');
-    return result?.cast<String, dynamic>() ?? {};
+  Future<List<DiscoveredPrinter>> discoverUsbPrinters() async {
+    final result = await methodChannel.invokeMethod<List<dynamic>>('discoverUsbPrinters');
+    return result?.map((item) => DiscoveredPrinter.fromMap(item.cast<String, dynamic>())).toList() ?? [];
   }
 
   @override
@@ -43,14 +70,43 @@ class MethodChannelZebraPrinter extends ZebraPrinterPlatform {
   }
 
   @override
-  Future<PrinterStatus> getStatus() async {
-    final result = await methodChannel.invokeMethod<Map<String, dynamic>>('getStatus');
-    return PrinterStatus.fromMap(result ?? {});
+  Future<void> sendCommands(String commands, {ZebraPrintLanguage? language}) async {
+    await methodChannel.invokeMethod<void>('sendCommands', {
+      'commands': commands,
+      'language': language?.name,
+    });
   }
 
   @override
-  Future<void> openCashDrawer() async {
-    await methodChannel.invokeMethod<void>('openCashDrawer');
+  Future<ZebraPrintLanguage> getPrinterLanguage() async {
+    final result = await methodChannel.invokeMethod<String>('getPrinterLanguage');
+    switch (result?.toLowerCase()) {
+      case 'cpcl':
+        return ZebraPrintLanguage.cpcl;
+      case 'zpl':
+      default:
+        return ZebraPrintLanguage.zpl;
+    }
+  }
+
+  @override
+  Future<String?> getSgdParameter(String parameter) async {
+    final result = await methodChannel.invokeMethod<String>('getSgdParameter', {'parameter': parameter});
+    return result;
+  }
+
+  @override
+  Future<void> setSgdParameter(String parameter, String value) async {
+    await methodChannel.invokeMethod<void>('setSgdParameter', {
+      'parameter': parameter,
+      'value': value,
+    });
+  }
+
+  @override
+  Future<PrinterStatus> getStatus() async {
+    final result = await methodChannel.invokeMethod<Map<String, dynamic>>('getStatus');
+    return PrinterStatus.fromMap(result ?? {});
   }
 
   @override

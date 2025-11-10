@@ -1,4 +1,52 @@
 /// Data models for zebra printer platform interface
+
+/// Represents a discovered Zebra printer
+class DiscoveredPrinter {
+  final String address;
+  final int port;
+  final String? friendlyName;
+  final String? serialNumber;
+  final String interfaceType; // TCP, BT, USB
+  final Map<String, dynamic>? additionalInfo;
+
+  const DiscoveredPrinter({
+    required this.address,
+    required this.port,
+    this.friendlyName,
+    this.serialNumber,
+    required this.interfaceType,
+    this.additionalInfo,
+  });
+
+  factory DiscoveredPrinter.fromMap(Map<String, dynamic> map) {
+    return DiscoveredPrinter(
+      address: map['address'] ?? '',
+      port: map['port'] ?? 9100,
+      friendlyName: map['friendlyName'],
+      serialNumber: map['serialNumber'],
+      interfaceType: map['interfaceType'] ?? 'TCP',
+      additionalInfo: map['additionalInfo']?.cast<String, dynamic>(),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'address': address,
+      'port': port,
+      'friendlyName': friendlyName,
+      'serialNumber': serialNumber,
+      'interfaceType': interfaceType,
+      'additionalInfo': additionalInfo,
+    };
+  }
+
+  @override
+  String toString() {
+    return 'DiscoveredPrinter(address: $address, port: $port, name: $friendlyName, type: $interfaceType)';
+  }
+}
+
+/// Data models for zebra printer platform interface
 class PrinterStatus {
   final bool isOnline;
   final String status;
@@ -52,27 +100,36 @@ class ZebraConnectionSettings {
   }
 }
 
-/// Interface types supported by Star printers
+/// Interface types supported by Zebra printers
 enum ZebraInterfaceType {
+  tcp,
   bluetooth,
   bluetoothLE,
-  lan,
   usb,
 }
 
-/// Print job configuration
+/// Print language enum for Zebra printers
+enum ZebraPrintLanguage {
+  zpl,  // Zebra Programming Language
+  cpcl, // Common Printing Command Language
+}
+
+/// Print job configuration for Zebra printers
 class PrintJob {
-  final String content;
+  final String content; // Raw ZPL or CPCL commands
+  final ZebraPrintLanguage? language; // Language hint (auto-detected if null)
   final Map<String, dynamic>? settings;
 
   const PrintJob({
     required this.content,
+    this.language,
     this.settings,
   });
 
   Map<String, dynamic> toMap() {
     return {
       'content': content,
+      'language': language?.name,
       'settings': settings,
     };
   }

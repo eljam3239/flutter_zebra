@@ -2,38 +2,53 @@ import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'models.dart';
 import 'method_channel_zebra_printer.dart';
 
-/// The interface that implementations of star_printer must implement.
+/// The interface that implementations of zebra_printer must implement.
 abstract class ZebraPrinterPlatform extends PlatformInterface {
-  /// Constructs a StarPrinterPlatform.
+  /// Constructs a ZebraPrinterPlatform.
   ZebraPrinterPlatform() : super(token: _token);
 
   static final Object _token = Object();
 
   static ZebraPrinterPlatform _instance = MethodChannelZebraPrinter();
 
-  /// The default instance of [StarPrinterPlatform] to use.
+  /// The default instance of [ZebraPrinterPlatform] to use.
   static ZebraPrinterPlatform get instance => _instance;
 
   /// Platform-specific implementations should set this with their own
-  /// platform-specific class that extends [StarPrinterPlatform].
+  /// platform-specific class that extends [ZebraPrinterPlatform].
   static set instance(ZebraPrinterPlatform instance) {
     PlatformInterface.verifyToken(instance, _token);
     _instance = instance;
   }
 
-  /// Discovers available Star printers
-  Future<List<String>> discoverPrinters() {
+  /// Discovers available Zebra printers using local broadcast
+  Future<List<DiscoveredPrinter>> discoverPrinters() {
     throw UnimplementedError('discoverPrinters() has not been implemented.');
   }
 
-  /// Discovers available Bluetooth Star printers specifically
-  Future<List<String>> discoverBluetoothPrinters() {
+  /// Discovers printers using multicast with specified hops
+  Future<List<DiscoveredPrinter>> discoverMulticastPrinters({int hops = 3, int? timeoutMs}) {
+    throw UnimplementedError('discoverMulticastPrinters() has not been implemented.');
+  }
+
+  /// Discovers printers using directed broadcast to a specific subnet
+  Future<List<DiscoveredPrinter>> discoverDirectedBroadcast(String ipAddress, {int? timeoutMs}) {
+    throw UnimplementedError('discoverDirectedBroadcast() has not been implemented.');
+  }
+
+  /// Discovers printers in a subnet range (e.g., "192.168.1.*", "192.168.1.10-50")
+  Future<List<DiscoveredPrinter>> discoverSubnetSearch(String subnetRange, {int? timeoutMs}) {
+    throw UnimplementedError('discoverSubnetSearch() has not been implemented.');
+  }
+
+  /// Discovers available Bluetooth Zebra printers specifically
+  Future<List<DiscoveredPrinter>> discoverBluetoothPrinters() {
     throw UnimplementedError('discoverBluetoothPrinters() has not been implemented.');
   }
 
-  /// Runs USB system diagnostics
-  Future<Map<String, dynamic>> usbDiagnostics() {
-    throw UnimplementedError('usbDiagnostics() has not been implemented.');
+  /// Discovers USB printers
+  Future<List<DiscoveredPrinter>> discoverUsbPrinters() {
+    throw UnimplementedError('discoverUsbPrinters() has not been implemented.');
   }
 
   /// Connects to a Zebra printer
@@ -51,14 +66,29 @@ abstract class ZebraPrinterPlatform extends PlatformInterface {
     throw UnimplementedError('printReceipt() has not been implemented.');
   }
 
+  /// Sends raw ZPL or CPCL commands to the printer
+  Future<void> sendCommands(String commands, {ZebraPrintLanguage? language}) {
+    throw UnimplementedError('sendCommands() has not been implemented.');
+  }
+
+  /// Gets the printer control language (ZPL or CPCL)
+  Future<ZebraPrintLanguage> getPrinterLanguage() {
+    throw UnimplementedError('getPrinterLanguage() has not been implemented.');
+  }
+
+  /// Retrieves an SGD (Set Get Do) parameter from the printer
+  Future<String?> getSgdParameter(String parameter) {
+    throw UnimplementedError('getSgdParameter() has not been implemented.');
+  }
+
+  /// Sets an SGD (Set Get Do) parameter on the printer  
+  Future<void> setSgdParameter(String parameter, String value) {
+    throw UnimplementedError('setSgdParameter() has not been implemented.');
+  }
+
   /// Gets the current printer status
   Future<PrinterStatus> getStatus() {
     throw UnimplementedError('getStatus() has not been implemented.');
-  }
-
-  /// Opens the cash drawer
-  Future<void> openCashDrawer() {
-    throw UnimplementedError('openCashDrawer() has not been implemented.');
   }
 
   /// Checks if a printer is connected
