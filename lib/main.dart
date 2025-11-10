@@ -42,7 +42,9 @@ class _MyHomePageState extends State<MyHomePage> {
 
     try {
       // Use actual Zebra printer discovery
+      print('[Flutter] Starting printer discovery...');
       final printers = await ZebraPrinter.discoverPrinters();
+      print('[Flutter] Discovery completed. Found ${printers.length} printers');
       
       setState(() {
         _discoveredPrinters = printers;
@@ -55,6 +57,7 @@ class _MyHomePageState extends State<MyHomePage> {
         SnackBar(content: Text('Found ${_discoveredPrinters.length} printers')),
       );
     } catch (e) {
+      print('[Flutter] Discovery failed: $e');
       setState(() {
         _isDiscovering = false;
       });
@@ -62,6 +65,73 @@ class _MyHomePageState extends State<MyHomePage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Discovery failed: $e')),
+      );
+    }
+  }
+
+  Future<void> _discoverMulticastPrinters() async {
+    setState(() {
+      _isDiscovering = true;
+    });
+
+    try {
+      print('[Flutter] Starting multicast discovery...');
+      final printers = await ZebraPrinter.discoverMulticastPrinters(hops: 3);
+      print('[Flutter] Multicast discovery completed. Found ${printers.length} printers');
+      
+      setState(() {
+        _discoveredPrinters = printers;
+        _selectedPrinter = _discoveredPrinters.isNotEmpty ? _discoveredPrinters.first : null;
+        _isDiscovering = false;
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Multicast found ${_discoveredPrinters.length} printers')),
+      );
+    } catch (e) {
+      print('[Flutter] Multicast discovery failed: $e');
+      setState(() {
+        _isDiscovering = false;
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Multicast discovery failed: $e')),
+      );
+    }
+  }
+
+  Future<void> _discoverSubnetPrinters() async {
+    setState(() {
+      _isDiscovering = true;
+    });
+
+    try {
+      print('[Flutter] Starting subnet search discovery...');
+      // Search common private network ranges
+      final printers = await ZebraPrinter.discoverSubnetSearch('10.20.30.*');
+      print('[Flutter] Subnet discovery completed. Found ${printers.length} printers');
+      
+      setState(() {
+        _discoveredPrinters = printers;
+        _selectedPrinter = _discoveredPrinters.isNotEmpty ? _discoveredPrinters.first : null;
+        _isDiscovering = false;
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Subnet search found ${_discoveredPrinters.length} printers')),
+      );
+    } catch (e) {
+      print('[Flutter] Subnet discovery failed: $e');
+      setState(() {
+        _isDiscovering = false;
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Subnet discovery failed: $e')),
       );
     }
   }
@@ -279,7 +349,23 @@ class _MyHomePageState extends State<MyHomePage> {
                                   valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                                 ),
                               )
-                            : const Text('Discover Printers'),
+                            : const Text('Discover Printers (Local)'),
+                        ),
+                        ElevatedButton(
+                          onPressed: _isDiscovering ? null : _discoverMulticastPrinters,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('Discover (Multicast)'),
+                        ),
+                        ElevatedButton(
+                          onPressed: _isDiscovering ? null : _discoverSubnetPrinters,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.orange,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('Discover (Subnet)'),
                         ),
                         ElevatedButton(
                           onPressed: _selectedPrinter != null && !_isConnected ? _connectToPrinter : null,
