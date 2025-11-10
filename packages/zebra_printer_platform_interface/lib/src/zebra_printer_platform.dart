@@ -41,6 +41,12 @@ abstract class ZebraPrinterPlatform extends PlatformInterface {
     throw UnimplementedError('discoverSubnetSearch() has not been implemented.');
   }
 
+  /// Automatically discovers printers on local network subnets
+  /// This method detects the device's current network and searches common subnet ranges
+  Future<List<DiscoveredPrinter>> discoverNetworkPrintersAuto({int? timeoutMs}) {
+    throw UnimplementedError('discoverNetworkPrintersAuto() has not been implemented.');
+  }
+
   /// Discovers available Bluetooth Zebra printers specifically
   Future<List<DiscoveredPrinter>> discoverBluetoothPrinters() {
     throw UnimplementedError('discoverBluetoothPrinters() has not been implemented.');

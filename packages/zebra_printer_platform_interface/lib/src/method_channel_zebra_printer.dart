@@ -39,7 +39,15 @@ class MethodChannelZebraPrinter extends ZebraPrinterPlatform {
       'subnetRange': subnetRange,
       'timeoutMs': timeoutMs,
     });
-    return result?.map((item) => DiscoveredPrinter.fromMap(item.cast<String, dynamic>())).toList() ?? [];
+    return (result ?? []).map((e) => DiscoveredPrinter.fromMap(Map<String, dynamic>.from(e))).toList();
+  }
+
+  @override
+  Future<List<DiscoveredPrinter>> discoverNetworkPrintersAuto({int? timeoutMs}) async {
+    final result = await methodChannel.invokeMethod<List<dynamic>>('discoverNetworkPrintersAuto', {
+      'timeoutMs': timeoutMs,
+    });
+    return (result ?? []).map((e) => DiscoveredPrinter.fromMap(Map<String, dynamic>.from(e))).toList();
   }
 
   @override

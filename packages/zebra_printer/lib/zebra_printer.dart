@@ -30,6 +30,12 @@ class ZebraPrinter {
     return _platform.discoverSubnetSearch(subnetRange, timeoutMs: timeoutMs);
   }
 
+  /// Automatically discovers printers on local network subnets
+  /// This method detects the device's current network and searches common subnet ranges
+  static Future<List<DiscoveredPrinter>> discoverNetworkPrintersAuto({int? timeoutMs}) {
+    return _platform.discoverNetworkPrintersAuto(timeoutMs: timeoutMs);
+  }
+
   /// Discovers available Bluetooth Zebra printers specifically
   static Future<List<DiscoveredPrinter>> discoverBluetoothPrinters() {
     return _platform.discoverBluetoothPrinters();

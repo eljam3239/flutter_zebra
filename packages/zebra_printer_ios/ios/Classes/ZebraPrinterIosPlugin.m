@@ -7,6 +7,9 @@
 #import "ZebraPrinterFactory.h"
 #import "TcpPrinterConnection.h"
 #import "MfiBtPrinterConnection.h"
+#import <ifaddrs.h>
+#import <arpa/inet.h>
+#import <net/if.h>
 
 @implementation ZebraPrinterIosPlugin
 
@@ -27,6 +30,8 @@
     [self discoverDirectedBroadcast:call result:result];
   } else if ([@"discoverSubnetSearch" isEqualToString:call.method]) {
     [self discoverSubnetSearch:call result:result];
+  } else if ([@"discoverNetworkPrintersAuto" isEqualToString:call.method]) {
+    [self discoverNetworkPrintersAuto:call result:result];
   } else if ([@"discoverBluetoothPrinters" isEqualToString:call.method]) {
     [self discoverBluetoothPrintersWithResult:result];
   } else if ([@"discoverUsbPrinters" isEqualToString:call.method]) {
@@ -343,6 +348,119 @@
 - (void)isConnectedWithResult:(FlutterResult)result {
   // TODO: Implement is connected check
   result(@NO);
+}
+
+- (void)discoverNetworkPrintersAuto:(FlutterMethodCall*)call result:(FlutterResult)result {
+  NSLog(@"[ZebraPrinter] Starting automatic network discovery...");
+  dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+    NSDictionary *args = call.arguments;
+    NSInteger timeoutMs = -1; // Default timeout
+    
+    if (args && [args isKindOfClass:[NSDictionary class]]) {
+      id timeoutValue = args[@"timeoutMs"];
+      if (timeoutValue && ![timeoutValue isKindOfClass:[NSNull class]]) {
+        timeoutMs = [timeoutValue integerValue];
+      }
+    }
+    
+    NSLog(@"[ZebraPrinter] Auto discovery timeout: %ld", (long)timeoutMs);
+    
+    // Get device's current network interfaces
+    NSArray *subnets = [self getLocalNetworkSubnets];
+    NSLog(@"[ZebraPrinter] Detected %lu local network subnets: %@", (unsigned long)[subnets count], subnets);
+    
+    NSMutableArray *allPrinters = [NSMutableArray array];
+    NSError *lastError = nil;
+    
+    // Search each detected subnet
+    for (NSString *subnet in subnets) {
+      NSLog(@"[ZebraPrinter] Searching subnet: %@", subnet);
+      NSError *error = nil;
+      NSArray *printers;
+      
+      if (timeoutMs > 0) {
+        printers = [NetworkDiscoverer subnetSearchWithRange:subnet 
+                                  andWaitForResponsesTimeout:timeoutMs 
+                                                       error:&error];
+      } else {
+        printers = [NetworkDiscoverer subnetSearchWithRange:subnet error:&error];
+      }
+      
+      if (error) {
+        NSLog(@"[ZebraPrinter] Error searching subnet %@: %@", subnet, error.localizedDescription);
+        lastError = error;
+      } else {
+        NSLog(@"[ZebraPrinter] Found %lu printers in subnet %@", (unsigned long)[printers count], subnet);
+        [allPrinters addObjectsFromArray:printers];
+      }
+    }
+    
+    NSLog(@"[ZebraPrinter] Auto discovery completed. Total found: %lu printers", (unsigned long)[allPrinters count]);
+    
+    dispatch_async(dispatch_get_main_queue(), ^{
+      if ([allPrinters count] == 0 && lastError) {
+        result([FlutterError errorWithCode:@"DISCOVERY_ERROR"
+                                   message:lastError.localizedDescription
+                                   details:nil]);
+      } else {
+        NSArray *discoveredPrinters = [self convertDiscoveredPrintersToArray:allPrinters];
+        NSLog(@"[ZebraPrinter] Returning %lu auto-discovered printers to Flutter", (unsigned long)[discoveredPrinters count]);
+        result(discoveredPrinters);
+      }
+    });
+  });
+}
+
+- (NSArray *)getLocalNetworkSubnets {
+  NSMutableArray *subnets = [NSMutableArray array];
+  struct ifaddrs *interfaces = NULL;
+  struct ifaddrs *temp_addr = NULL;
+  
+  // Get list of all network interfaces
+  if (getifaddrs(&interfaces) == 0) {
+    temp_addr = interfaces;
+    
+    while(temp_addr != NULL) {
+      if(temp_addr->ifa_addr->sa_family == AF_INET) {
+        // Check if interface is up and not loopback
+        if((temp_addr->ifa_flags & IFF_UP) && !(temp_addr->ifa_flags & IFF_LOOPBACK)) {
+          // Get IP address
+          struct sockaddr_in* addr = (struct sockaddr_in*)temp_addr->ifa_addr;
+          struct sockaddr_in* netmask = (struct sockaddr_in*)temp_addr->ifa_netmask;
+          
+          if (addr && netmask) {
+            uint32_t ip = ntohl(addr->sin_addr.s_addr);
+            uint32_t mask = ntohl(netmask->sin_addr.s_addr);
+            uint32_t network = ip & mask;
+            
+            // Common subnet masks for local networks
+            if (mask == 0xFFFFFF00) { // 255.255.255.0 (/24)
+              NSString *subnet = [NSString stringWithFormat:@"%d.%d.%d.*", 
+                                  (int)((network >> 24) & 0xFF),
+                                  (int)((network >> 16) & 0xFF), 
+                                  (int)((network >> 8) & 0xFF)];
+              
+              if (![subnets containsObject:subnet]) {
+                NSLog(@"[ZebraPrinter] Found local subnet: %@ (interface: %s)", subnet, temp_addr->ifa_name);
+                [subnets addObject:subnet];
+              }
+            }
+          }
+        }
+      }
+      temp_addr = temp_addr->ifa_next;
+    }
+  }
+  
+  if (interfaces) freeifaddrs(interfaces);
+  
+  // If no subnets detected, add common private network ranges
+  if ([subnets count] == 0) {
+    NSLog(@"[ZebraPrinter] No local subnets detected, using common ranges");
+    [subnets addObjectsFromArray:@[@"192.168.1.*", @"192.168.0.*", @"10.0.1.*", @"10.0.0.*"]];
+  }
+  
+  return [subnets copy];
 }
 
 @end

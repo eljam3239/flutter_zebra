@@ -136,6 +136,39 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  Future<void> _discoverNetworkPrintersAuto() async {
+    setState(() {
+      _isDiscovering = true;
+    });
+
+    try {
+      print('[Flutter] Starting automatic network discovery...');
+      final printers = await ZebraPrinter.discoverNetworkPrintersAuto();
+      print('[Flutter] Auto discovery completed. Found ${printers.length} printers');
+      
+      setState(() {
+        _discoveredPrinters = printers;
+        _selectedPrinter = _discoveredPrinters.isNotEmpty ? _discoveredPrinters.first : null;
+        _isDiscovering = false;
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Auto discovery found ${_discoveredPrinters.length} printers')),
+      );
+    } catch (e) {
+      print('[Flutter] Auto discovery failed: $e');
+      setState(() {
+        _isDiscovering = false;
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Auto discovery failed: $e')),
+      );
+    }
+  }
+
   Future<void> _connectToPrinter() async {
     if (_selectedPrinter == null) {
       if (!mounted) return;
@@ -366,6 +399,14 @@ class _MyHomePageState extends State<MyHomePage> {
                             foregroundColor: Colors.white,
                           ),
                           child: const Text('Discover (Subnet)'),
+                        ),
+                        ElevatedButton(
+                          onPressed: _isDiscovering ? null : _discoverNetworkPrintersAuto,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.purple,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('Auto Discover'),
                         ),
                         ElevatedButton(
                           onPressed: _selectedPrinter != null && !_isConnected ? _connectToPrinter : null,
