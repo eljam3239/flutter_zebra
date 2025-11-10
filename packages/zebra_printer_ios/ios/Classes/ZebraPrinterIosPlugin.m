@@ -286,17 +286,77 @@
 #pragma mark - Connection Methods (Stubs)
 
 - (void)connect:(FlutterMethodCall*)call result:(FlutterResult)result {
-  // TODO: Implement connection
-  result([FlutterError errorWithCode:@"UNIMPLEMENTED"
-                             message:@"connect not yet implemented"
-                             details:nil]);
+  NSLog(@"[ZebraPrinter] connect called with args: %@", call.arguments);
+
+  NSDictionary *args = call.arguments;
+  if (!args || ![args isKindOfClass:[NSDictionary class]]) {
+    result([FlutterError errorWithCode:@"INVALID_ARGUMENT" message:@"Invalid connect arguments" details:nil]);
+    return;
+  }
+
+  NSString *interfaceType = args[@"interfaceType"];
+  NSString *identifier = args[@"identifier"];
+  NSNumber *timeout = args[@"timeout"];
+
+  if (!interfaceType || !identifier) {
+    result([FlutterError errorWithCode:@"INVALID_ARGUMENT" message:@"interfaceType and identifier are required" details:nil]);
+    return;
+  }
+
+  // Only implement TCP connect for now
+  if ([[interfaceType lowercaseString] isEqualToString:@"tcp"]) {
+    // Default port 9100 unless the identifier supplies one (not currently supported)
+    NSInteger port = 9100;
+
+    @try {
+      TcpPrinterConnection *conn = [[TcpPrinterConnection alloc] initWithAddress:identifier andWithPort:port];
+
+      // If the caller supplied a timeout, use it for open
+      if (timeout && ![timeout isKindOfClass:[NSNull class]] && [timeout integerValue] > 0) {
+        // TcpPrinterConnection exposes setMaxTimeoutForOpen: (int)
+        [conn setMaxTimeoutForOpen:[timeout intValue]];
+      }
+
+      BOOL opened = [conn open];
+      if (!opened) {
+        NSLog(@"[ZebraPrinter] TCP open failed for %@:%ld", identifier, (long)port);
+        result([FlutterError errorWithCode:@"CONNECTION_FAILED" message:@"Failed to open TCP connection" details:nil]);
+        return;
+      }
+
+      // Save active connection
+      self.activeConnection = conn;
+      NSLog(@"[ZebraPrinter] Connected to %@:%ld successfully", identifier, (long)port);
+
+      // Return success (void)
+      result(nil);
+      return;
+    } @catch (NSException *ex) {
+      NSLog(@"[ZebraPrinter] Exception while connecting: %@", ex);
+      result([FlutterError errorWithCode:@"CONNECTION_EXCEPTION" message:ex.reason details:nil]);
+      return;
+    }
+  } else {
+    // Unsupported interface type at present
+    result([FlutterError errorWithCode:@"UNSUPPORTED_INTERFACE" message:@"Only TCP connect is implemented on iOS plugin" details:nil]);
+    return;
+  }
 }
 
 - (void)disconnectWithResult:(FlutterResult)result {
-  // TODO: Implement disconnect
-  result([FlutterError errorWithCode:@"UNIMPLEMENTED"
-                             message:@"disconnect not yet implemented"
-                             details:nil]);
+  NSLog(@"[ZebraPrinter] disconnect called");
+  if (self.activeConnection) {
+    @try {
+      [self.activeConnection close];
+    } @catch (NSException *ex) {
+      NSLog(@"[ZebraPrinter] Exception while closing connection: %@", ex);
+    }
+    self.activeConnection = nil;
+    result(nil);
+  } else {
+    // Nothing to disconnect
+    result(nil);
+  }
 }
 
 #pragma mark - Printing Methods (Stubs)
@@ -346,8 +406,15 @@
 }
 
 - (void)isConnectedWithResult:(FlutterResult)result {
-  // TODO: Implement is connected check
-  result(@NO);
+  BOOL connected = NO;
+  if (self.activeConnection) {
+    @try {
+      connected = [self.activeConnection isConnected];
+    } @catch (NSException *ex) {
+      connected = NO;
+    }
+  }
+  result(@(connected));
 }
 
 - (void)discoverNetworkPrintersAuto:(FlutterMethodCall*)call result:(FlutterResult)result {
