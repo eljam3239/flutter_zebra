@@ -272,15 +272,28 @@ class _MyHomePageState extends State<MyHomePage> {
     }
 
     try {
-      // Create a simple ZPL label with border
-      const zplLabel = '^XA^FO17,16^GB379,371,8^FS^FT65,255^A0N,135,134^FDTEST LABEL^FS^XZ';
+      // Use the T-Shirt label ZPL
+      const tShirtLabelZpl = '''
+^XA
+^CF0,27
+^FO104,150
+^FD^FS
+^BY3,3,111
+^FO140,226^BCN^FD8884959395020^FS
+^CF0,47
+^FO168,14
+^FDT-Shirt^FS
+^CF0,46
+^FO180,58
+^FD\$5.00^FS
+^CF0,30
+^FO138,106
+^FDSmall Turquoise^FS
+^BY2,3,50
+^FO110,144^BCN^FD123456789^FS
+^XZ''';
       
-      final printJob = PrintJob(
-        content: zplLabel,
-        language: ZebraPrintLanguage.zpl,
-      );
-
-      await ZebraPrinter.printReceipt(printJob);
+      await ZebraPrinter.sendCommands(tShirtLabelZpl, language: ZebraPrintLanguage.zpl);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

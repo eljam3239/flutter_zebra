@@ -328,6 +328,8 @@
       self.activeConnection = conn;
       NSLog(@"[ZebraPrinter] Connected to %@:%ld successfully", identifier, (long)port);
 
+      // Comment out auto-print on connection - moved to Print Receipt/Label buttons
+      /*
       // Send a simple test print to verify the connection works
       NSString *testZpl = @"^XA^FO20,20^A0N,25,25^FDZebra Flutter Test Print^FS^FO20,60^A0N,20,20^FDConnection Success!^FS^XZ";
       NSError *printError = nil;
@@ -340,6 +342,7 @@
       } else {
         NSLog(@"[ZebraPrinter] Test print sent successfully (%ld bytes)", (long)bytesWritten);
       }
+      */
 
       // Return success (void)
       result(nil);
@@ -375,17 +378,82 @@
 #pragma mark - Printing Methods (Stubs)
 
 - (void)printReceipt:(FlutterMethodCall*)call result:(FlutterResult)result {
-  // TODO: Implement print receipt
-  result([FlutterError errorWithCode:@"UNIMPLEMENTED"
-                             message:@"printReceipt not yet implemented"
+  NSLog(@"[ZebraPrinter] printReceipt called");
+  
+  if (!self.activeConnection || ![self.activeConnection isConnected]) {
+    result([FlutterError errorWithCode:@"NOT_CONNECTED"
+                             message:@"Printer not connected"
                              details:nil]);
+    return;
+  }
+
+  @try {
+    // Send a test receipt print (ZPL format)
+    NSString *receiptZpl = @"^XA^FO20,20^A0N,25,25^FDReceipt Test Print^FS^FO20,60^A0N,20,20^FDItem: Test Product^FS^FO20,90^A0N,20,20^FDPrice: $12.34^FS^FO20,120^A0N,20,20^FD================^FS^FO20,150^A0N,20,20^FDTotal: $12.34^FS^XZ";
+    
+    NSError *error = nil;
+    NSData *zplData = [receiptZpl dataUsingEncoding:NSUTF8StringEncoding];
+    
+    NSInteger bytesWritten = [self.activeConnection write:zplData error:&error];
+    
+    if (error || bytesWritten <= 0) {
+      NSLog(@"[ZebraPrinter] Receipt print failed: %@ (bytes written: %ld)", error.localizedDescription, (long)bytesWritten);
+      result([FlutterError errorWithCode:@"PRINT_ERROR"
+                               message:error.localizedDescription ?: @"Failed to send data to printer"
+                               details:nil]);
+    } else {
+      NSLog(@"[ZebraPrinter] Receipt printed successfully (%ld bytes)", (long)bytesWritten);
+      result(nil);
+    }
+  } @catch (NSException *ex) {
+    NSLog(@"[ZebraPrinter] Exception while printing receipt: %@", ex);
+    result([FlutterError errorWithCode:@"PRINT_EXCEPTION"
+                             message:ex.reason
+                             details:nil]);
+  }
 }
 
 - (void)sendCommands:(FlutterMethodCall*)call result:(FlutterResult)result {
-  // TODO: Implement send commands
-  result([FlutterError errorWithCode:@"UNIMPLEMENTED"
-                             message:@"sendCommands not yet implemented"
+  NSLog(@"[ZebraPrinter] sendCommands called");
+  
+  if (!self.activeConnection || ![self.activeConnection isConnected]) {
+    result([FlutterError errorWithCode:@"NOT_CONNECTED"
+                             message:@"Printer not connected"
                              details:nil]);
+    return;
+  }
+
+  NSDictionary *args = call.arguments;
+  NSString *commands = args[@"commands"];
+  NSString *language = args[@"language"];
+  
+  // If no commands provided, use a test label
+  if (!commands || [commands length] == 0) {
+    commands = @"^XA\n^CF0,27\n^FO104,150\n^FD^FS\n^BY3,3,111\n^FO140,226^BCN^FD8884959395020^FS\n^CF0,47\n^FO168,14\n^FDT-Shirt^FS\n^CF0,46\n^FO180,58\n^FD$5.00^FS\n^CF0,30\n^FO138,106\n^FDSmall Turquoise^FS\n^BY2,3,50\n^FO110,144^BCN^FD123456789^FS\n^XZ";
+    NSLog(@"[ZebraPrinter] No commands provided, using T-Shirt barcode label");
+  }
+
+  @try {
+    NSError *error = nil;
+    NSData *commandData = [commands dataUsingEncoding:NSUTF8StringEncoding];
+    
+    NSInteger bytesWritten = [self.activeConnection write:commandData error:&error];
+    
+    if (error || bytesWritten <= 0) {
+      NSLog(@"[ZebraPrinter] Send commands failed: %@ (bytes written: %ld)", error.localizedDescription, (long)bytesWritten);
+      result([FlutterError errorWithCode:@"PRINT_ERROR"
+                               message:error.localizedDescription ?: @"Failed to send commands to printer"
+                               details:nil]);
+    } else {
+      NSLog(@"[ZebraPrinter] Commands sent successfully (%ld bytes), language: %@", (long)bytesWritten, language ?: @"auto");
+      result(nil);
+    }
+  } @catch (NSException *ex) {
+    NSLog(@"[ZebraPrinter] Exception while sending commands: %@", ex);
+    result([FlutterError errorWithCode:@"PRINT_EXCEPTION"
+                             message:ex.reason
+                             details:nil]);
+  }
 }
 
 #pragma mark - Status Methods (Stubs)

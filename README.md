@@ -11,3 +11,6 @@ Flutter wrapper for Zebra's iOS and Android link-OS sdks.
 | -------|-------|
 | iOS    |       |
 | Android|       |
+
+## ZPL
+https://zplmagic.com/
