@@ -328,6 +328,19 @@
       self.activeConnection = conn;
       NSLog(@"[ZebraPrinter] Connected to %@:%ld successfully", identifier, (long)port);
 
+      // Send a simple test print to verify the connection works
+      NSString *testZpl = @"^XA^FO20,20^A0N,25,25^FDZebra Flutter Test Print^FS^FO20,60^A0N,20,20^FDConnection Success!^FS^XZ";
+      NSError *printError = nil;
+      NSData *zplData = [testZpl dataUsingEncoding:NSUTF8StringEncoding];
+      
+      NSInteger bytesWritten = [conn write:zplData error:&printError];
+      if (printError || bytesWritten <= 0) {
+        NSLog(@"[ZebraPrinter] Test print failed: %@ (bytes written: %ld)", printError.localizedDescription, (long)bytesWritten);
+        // Don't fail the connection for print errors, just log them
+      } else {
+        NSLog(@"[ZebraPrinter] Test print sent successfully (%ld bytes)", (long)bytesWritten);
+      }
+
       // Return success (void)
       result(nil);
       return;
