@@ -272,7 +272,7 @@ class _MyHomePageState extends State<MyHomePage> {
     }
 
     try {
-      // Use the T-Shirt label ZPL
+      // Use the updated T-Shirt label ZPL
       const tShirtLabelZpl = '''
 ^XA
 ^CF0,27
@@ -280,17 +280,17 @@ class _MyHomePageState extends State<MyHomePage> {
 ^FD^FS
 ^BY3,3,111
 ^FO140,226^BCN^FD8884959395020^FS
-^CF0,47
-^FO168,14
+^CF0,38
+^FO182,18
 ^FDT-Shirt^FS
-^CF0,46
-^FO180,58
+^CF0,38
+^FO190,58
 ^FD\$5.00^FS
-^CF0,30
-^FO138,106
+^CF0,25
+^FO150,100
 ^FDSmall Turquoise^FS
 ^BY2,3,50
-^FO110,144^BCN^FD123456789^FS
+^FO98,134^BCN^FD123456789^FS
 ^XZ''';
       
       await ZebraPrinter.sendCommands(tShirtLabelZpl, language: ZebraPrintLanguage.zpl);

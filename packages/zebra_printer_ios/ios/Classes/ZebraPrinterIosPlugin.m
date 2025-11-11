@@ -429,7 +429,7 @@
   
   // If no commands provided, use a test label
   if (!commands || [commands length] == 0) {
-    commands = @"^XA\n^CF0,27\n^FO104,150\n^FD^FS\n^BY3,3,111\n^FO140,226^BCN^FD8884959395020^FS\n^CF0,47\n^FO168,14\n^FDT-Shirt^FS\n^CF0,46\n^FO180,58\n^FD$5.00^FS\n^CF0,30\n^FO138,106\n^FDSmall Turquoise^FS\n^BY2,3,50\n^FO110,144^BCN^FD123456789^FS\n^XZ";
+    commands = @"^XA\n^CF0,27\n^FO104,150\n^FD^FS\n^BY3,3,111\n^FO140,226^BCN^FD8884959395020^FS\n^CF0,38\n^FO182,18\n^FDT-Shirt^FS\n^CF0,38\n^FO190,58\n^FD$5.00^FS\n^CF0,25\n^FO150,100\n^FDSmall Turquoise^FS\n^BY2,3,50\n^FO98,134^BCN^FD123456789^FS\n^XZ";
     NSLog(@"[ZebraPrinter] No commands provided, using T-Shirt barcode label");
   }
 
