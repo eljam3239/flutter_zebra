@@ -270,27 +270,29 @@ class _MyHomePageState extends State<MyHomePage> {
       );
       return;
     }
+    String productName = "T-Shirt";
+    String colorSize = "Small Turquoise";
+    String scancode = "123456789";
+    String price = "\$5.00";
 
     try {
       // Use the updated T-Shirt label ZPL
-      const tShirtLabelZpl = '''
+      String tShirtLabelZpl = '''
 ^XA
 ^CF0,27
 ^FO104,150
 ^FD^FS
-^BY3,3,111
-^FO140,226^BCN^FD8884959395020^FS
-^CF0,38
-^FO182,18
-^FDT-Shirt^FS
-^CF0,38
-^FO190,58
-^FD\$5.00^FS
 ^CF0,25
-^FO150,100
-^FDSmall Turquoise^FS
+^FO134,90
+^FD$colorSize^FS
 ^BY2,3,50
-^FO98,134^BCN^FD123456789^FS
+^FO82,124^BCN^FD$scancode^FS
+^CF0,38
+^FO174,52
+^FD$price^FS
+^CF0,38
+^FO166,14
+^FD$productName^FS
 ^XZ''';
       
       await ZebraPrinter.sendCommands(tShirtLabelZpl, language: ZebraPrintLanguage.zpl);
