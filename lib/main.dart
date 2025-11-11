@@ -1,5 +1,3 @@
-import 'dart:ffi';
-
 import 'package:flutter/material.dart';
 import 'package:zebra_printer/zebra_printer.dart';
 
@@ -36,6 +34,7 @@ class _MyHomePageState extends State<MyHomePage> {
   String _printerStatus = 'Unknown';
   DiscoveredPrinter? _selectedPrinter;
   bool _isDiscovering = false;
+  int _labelQuantity = 1;
 
   Future<void> _discoverPrinters() async {
     setState(() {
@@ -52,6 +51,7 @@ class _MyHomePageState extends State<MyHomePage> {
         _discoveredPrinters = printers;
         _selectedPrinter = _discoveredPrinters.isNotEmpty ? _discoveredPrinters.first : null;
         _isDiscovering = false;
+        _labelQuantity = 1;
       });
 
       if (!mounted) return;
@@ -314,11 +314,19 @@ class _MyHomePageState extends State<MyHomePage> {
 ^FO0,14^FB433,1,0,C^FD$productName^FS
 ^XZ''';
       
-      await ZebraPrinter.sendCommands(tShirtLabelZpl, language: ZebraPrintLanguage.zpl);
+      // Print labels based on quantity
+      for (int i = 0; i < _labelQuantity; i++) {
+        await ZebraPrinter.sendCommands(tShirtLabelZpl, language: ZebraPrintLanguage.zpl);
+        
+        // Small delay between labels to prevent overwhelming the printer
+        if (i < _labelQuantity - 1) {
+          await Future.delayed(const Duration(milliseconds: 100));
+        }
+      }
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Label sent successfully')),
+        SnackBar(content: Text('$_labelQuantity label(s) sent successfully')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -458,8 +466,42 @@ class _MyHomePageState extends State<MyHomePage> {
                           onPressed: _isConnected ? _printLabel : null,
                           child: const Text('Print Label'),
                         ),
+                        
                       ],
                     ),
+                    const SizedBox(height: 16),
+                        const Text('Number of Labels to Print:', style: TextStyle(fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            SizedBox(
+                              width: 100,
+                              child: TextField(
+                                keyboardType: TextInputType.number,
+                                decoration: const InputDecoration(
+                                  labelText: 'Quantity',
+                                  border: OutlineInputBorder(),
+                                ),
+                                controller: TextEditingController(text: _labelQuantity.toString()),
+                                onChanged: (v) {
+                                  final qty = int.tryParse(v) ?? 1;
+                                  setState(() => _labelQuantity = qty.clamp(1, 100));
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Slider(
+                                value: _labelQuantity.toDouble(),
+                                min: 1,
+                                max: 20,
+                                divisions: 19,
+                                label: _labelQuantity.toString(),
+                                onChanged: (v) => setState(() => _labelQuantity = v.round()),
+                              ),
+                            ),
+                          ],
+                        ),
                   ],
                 ),
               ),
