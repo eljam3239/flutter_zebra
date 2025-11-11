@@ -242,19 +242,34 @@ class _MyHomePageState extends State<MyHomePage> {
     }
 
     try {
-      // Create a simple ZPL test label
-      const zplTestLabel = '^XA^FO20,20^A0N,25,25^FDZebra Test Print^FS^XZ';
+      // Use the receipt ZPL
+      const receiptZpl = '''
+^XA
+^CF0,47
+^FO226,68
+^FDTest Store^FS
+^CF0,27
+^FO156,132
+^FD100 LeBron St, Cleveland, OH^FS
+^CF0,30
+^FO60,586
+^FDCashier: Eli^FS
+^CF0,30
+^FO476,586
+^FDLane: 1^FS
+^CF0,30
+^FO188,1064
+^FDThank you for coming!^FS
+^CF0,30
+^FO202,178
+^FDTue Nov 11 4:03 PM^FS
+^XZ''';
       
-      final printJob = PrintJob(
-        content: zplTestLabel,
-        language: ZebraPrintLanguage.zpl,
-      );
-
-      await ZebraPrinter.printReceipt(printJob);
+      await ZebraPrinter.sendCommands(receiptZpl, language: ZebraPrintLanguage.zpl);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Test label sent successfully')),
+        const SnackBar(content: Text('Receipt sent successfully')),
       );
     } catch (e) {
       if (!mounted) return;
