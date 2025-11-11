@@ -389,7 +389,7 @@
 
   @try {
     // Send a test receipt print (ZPL format)
-    NSString *receiptZpl = @"^XA^FO20,20^A0N,25,25^FDReceipt Test Print^FS^FO20,60^A0N,20,20^FDItem: Test Product^FS^FO20,90^A0N,20,20^FDPrice: $12.34^FS^FO20,120^A0N,20,20^FD================^FS^FO20,150^A0N,20,20^FDTotal: $12.34^FS^XZ";
+    NSString *receiptZpl = @"^XA\n^CF0,47\n^FO226,68\n^FDTest Store^FS\n^CF0,27\n^FO156,132\n^FD100 LeBron St, Cleveland, OH^FS\n^CF0,30\n^FO60,586\n^FDCashier: Eli^FS\n^CF0,30\n^FO476,586\n^FDLane: 1^FS\n^CF0,30\n^FO188,1064\n^FDThank you for coming!^FS\n^CF0,30\n^FO202,178\n^FDTue Nov 11 4:03 PM^FS\n^XZ";
     
     NSError *error = nil;
     NSData *zplData = [receiptZpl dataUsingEncoding:NSUTF8StringEncoding];
