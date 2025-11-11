@@ -1,3 +1,5 @@
+import 'dart:ffi';
+
 import 'package:flutter/material.dart';
 import 'package:zebra_printer/zebra_printer.dart';
 
@@ -274,6 +276,26 @@ class _MyHomePageState extends State<MyHomePage> {
     String colorSize = "Small Turquoise";
     String scancode = "123456789";
     String price = "\$5.00";
+    double paperWidthMM = 54.1;
+
+    int scancodeLength = scancode.length;
+    // Calculate barcode position
+    int dpi = 203;
+    double paperWidthInches = paperWidthMM / 25.4;
+    int paperWidthDots = (paperWidthInches * dpi).round();
+
+    // Estimate barcode width for Code 128
+    // Code 128: Each character takes ~11 modules + start/stop characters
+    int totalBarcodeCharacters = scancodeLength + 3; // +3 for start, check, and stop characters
+    int moduleWidth = 2; // from ^BY2
+    int estimatedBarcodeWidth = totalBarcodeCharacters * 11 * moduleWidth;
+
+    // Calculate centered X position for barcode
+    int barcodeX = (paperWidthDots - estimatedBarcodeWidth) ~/ 2;
+
+    // Ensure barcode doesn't go off the left edge
+    barcodeX = barcodeX.clamp(0, paperWidthDots - estimatedBarcodeWidth);
+
 
     try {
       // Use the updated T-Shirt label ZPL
@@ -283,16 +305,13 @@ class _MyHomePageState extends State<MyHomePage> {
 ^FO104,150
 ^FD^FS
 ^CF0,25
-^FO134,90
-^FD$colorSize^FS
+^FO0,90^FB433,1,0,C^FD$colorSize^FS
 ^BY2,3,50
-^FO82,124^BCN^FD$scancode^FS
+^FO$barcodeX,124^BCN^FD$scancode^FS
 ^CF0,38
-^FO174,52
-^FD$price^FS
+^FO0,52^FB433,1,0,C^FD$price^FS
 ^CF0,38
-^FO166,14
-^FD$productName^FS
+^FO0,14^FB433,1,0,C^FD$productName^FS
 ^XZ''';
       
       await ZebraPrinter.sendCommands(tShirtLabelZpl, language: ZebraPrintLanguage.zpl);
