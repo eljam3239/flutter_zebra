@@ -192,6 +192,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "15.0.0"
+  zebra_printer_android:
+    dependency: "direct main"
+    description:
+      path: "../zebra_printer_android"
+      relative: true
+    source: path
+    version: "0.0.1"
   zebra_printer_ios:
     dependency: "direct main"
     description:

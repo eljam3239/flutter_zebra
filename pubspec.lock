@@ -223,6 +223,13 @@ packages:
       relative: true
     source: path
     version: "1.0.0"
+  zebra_printer_android:
+    dependency: transitive
+    description:
+      path: "packages/zebra_printer_android"
+      relative: true
+    source: path
+    version: "1.0.0"
   zebra_printer_ios:
     dependency: transitive
     description:

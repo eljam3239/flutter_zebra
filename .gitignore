@@ -50,3 +50,6 @@ app.*.map.json
 
 # iOS Zebra SDK xcframework
 packages/zebra_printer_ios/ios/Frameworks
+
+#android Zebra SDK libs
+packages/zebra_printer_android/android/libs

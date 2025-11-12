@@ -14,8 +14,8 @@ dependencies:
     path: ../zebra_printer_platform_interface
   zebra_printer_ios:
     path: ../zebra_printer_ios
-  # zebra_printer_android:
-  #   path: ../zebra_printer_android
+  zebra_printer_android:
+    path: ../zebra_printer_android
 
 dev_dependencies:
   flutter_test:
@@ -26,5 +26,5 @@ flutter:
     platforms:
       ios:
         default_package: zebra_printer_ios
-      # android:
-      #   default_package: zebra_printer_android
+      android:
+        default_package: zebra_printer_android
