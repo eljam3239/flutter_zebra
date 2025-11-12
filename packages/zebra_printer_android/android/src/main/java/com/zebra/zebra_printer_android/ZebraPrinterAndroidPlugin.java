@@ -170,10 +170,11 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
                     for (DiscoveredPrinter printer : discoveredPrinters) {
                         Map<String, Object> printerMap = new HashMap<>();
                         printerMap.put("friendlyName", printer.getDiscoveryDataMap().get("FRIENDLY_NAME"));
-                        printerMap.put("ipAddress", getPrinterAddress(printer));
-                        printerMap.put("macAddress", printer.getDiscoveryDataMap().get("SYSTEM_NAME"));
-                        printerMap.put("model", printer.getDiscoveryDataMap().get("MODEL"));
+                        printerMap.put("address", getPrinterAddress(printer));
+                        printerMap.put("port", 9100);
+                        printerMap.put("interfaceType", "TCP");
                         printerMap.put("serialNumber", printer.getDiscoveryDataMap().get("SERIAL_NUMBER"));
+                        printerMap.put("additionalInfo", printer.getDiscoveryDataMap());
                         printers.add(printerMap);
                     }
                 }
@@ -193,22 +194,42 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
     }
 
     private void connect(MethodCall call, Result result) {
-        Map<String, Object> settings = call.argument("connectionSettings");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> settings = (Map<String, Object>) call.arguments;
         if (settings == null) {
             result.error("MISSING_ARGUMENT", "Connection settings are required", null);
             return;
         }
 
-        String ipAddress = (String) settings.get("ipAddress");
-        Integer port = (Integer) settings.get("port");
+        String interfaceType = (String) settings.get("interfaceType");
+        String identifier = (String) settings.get("identifier");
+        Integer timeout = (Integer) settings.get("timeout");
         
-        if (ipAddress == null) {
-            result.error("MISSING_ARGUMENT", "IP address is required", null);
+        if (interfaceType == null || identifier == null) {
+            result.error("MISSING_ARGUMENT", "interfaceType and identifier are required", null);
             return;
         }
+
+        // Only implement TCP connect for now (matching iOS implementation)
+        if (!"tcp".equalsIgnoreCase(interfaceType)) {
+            result.error("UNSUPPORTED_INTERFACE", "Only TCP interface is currently supported", null);
+            return;
+        }
+
+        // Parse IP address and port from identifier
+        String ipAddress;
+        int port = 9100; // Default Zebra port
         
-        if (port == null) {
-            port = 9100; // Default Zebra port
+        if (identifier.contains(":")) {
+            String[] parts = identifier.split(":");
+            ipAddress = parts[0];
+            try {
+                port = Integer.parseInt(parts[1]);
+            } catch (NumberFormatException e) {
+                // Keep default port if parsing fails
+            }
+        } else {
+            ipAddress = identifier;
         }
 
         // Make final copies for lambda
@@ -365,9 +386,9 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
                     for (DiscoveredPrinter printer : discoveredPrinters) {
                         Map<String, Object> printerMap = new HashMap<>();
                         printerMap.put("friendlyName", printer.getDiscoveryDataMap().get("FRIENDLY_NAME"));
-                        printerMap.put("ipAddress", getPrinterAddress(printer));
-                        printerMap.put("macAddress", printer.getDiscoveryDataMap().get("SYSTEM_NAME"));
-                        printerMap.put("model", printer.getDiscoveryDataMap().get("MODEL"));
+                        printerMap.put("address", getPrinterAddress(printer));
+                        printerMap.put("port", "9100");
+                        printerMap.put("interfaceType", "tcp");
                         printerMap.put("serialNumber", printer.getDiscoveryDataMap().get("SERIAL_NUMBER"));
                         printers.add(printerMap);
                     }
@@ -445,9 +466,9 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
                     for (DiscoveredPrinter printer : discoveredPrinters) {
                         Map<String, Object> printerMap = new HashMap<>();
                         printerMap.put("friendlyName", printer.getDiscoveryDataMap().get("FRIENDLY_NAME"));
-                        printerMap.put("ipAddress", getPrinterAddress(printer));
-                        printerMap.put("macAddress", printer.getDiscoveryDataMap().get("SYSTEM_NAME"));
-                        printerMap.put("model", printer.getDiscoveryDataMap().get("MODEL"));
+                        printerMap.put("address", getPrinterAddress(printer));
+                        printerMap.put("port", "9100");
+                        printerMap.put("interfaceType", "tcp");
                         printerMap.put("serialNumber", printer.getDiscoveryDataMap().get("SERIAL_NUMBER"));
                         printers.add(printerMap);
                     }
@@ -541,9 +562,9 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
                     for (DiscoveredPrinter printer : discoveredPrinters) {
                         Map<String, Object> printerMap = new HashMap<>();
                         printerMap.put("friendlyName", printer.getDiscoveryDataMap().get("FRIENDLY_NAME"));
-                        printerMap.put("ipAddress", getPrinterAddress(printer));
-                        printerMap.put("macAddress", printer.getDiscoveryDataMap().get("SYSTEM_NAME"));
-                        printerMap.put("model", printer.getDiscoveryDataMap().get("MODEL"));
+                        printerMap.put("address", getPrinterAddress(printer));
+                        printerMap.put("port", "9100");
+                        printerMap.put("interfaceType", "tcp");
                         printerMap.put("serialNumber", printer.getDiscoveryDataMap().get("SERIAL_NUMBER"));
                         printers.add(printerMap);
                     }
