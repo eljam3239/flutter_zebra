@@ -10,7 +10,7 @@ Flutter wrapper for Zebra's iOS and Android link-OS sdks.
 | Device | ZD421 |
 | -------|-------|
 | iOS    |   TCP    |
-| Android|       |
+| Android|   TCP    |
 
 ## ZPL
 https://zplmagic.com/
