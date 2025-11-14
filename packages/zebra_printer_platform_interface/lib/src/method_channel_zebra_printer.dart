@@ -53,7 +53,21 @@ class MethodChannelZebraPrinter extends ZebraPrinterPlatform {
   @override
   Future<List<DiscoveredPrinter>> discoverBluetoothPrinters() async {
     final result = await methodChannel.invokeMethod<List<dynamic>>('discoverBluetoothPrinters');
-    return result?.map((item) => DiscoveredPrinter.fromMap(item.cast<String, dynamic>())).toList() ?? [];
+    return result?.map((item) => DiscoveredPrinter.fromMap(Map<String, dynamic>.from(item))).toList() ?? [];
+  }
+
+  @override
+  Future<List<DiscoveredPrinter>> discoverBluetoothNative() async {
+    final result = await methodChannel.invokeMethod<List<dynamic>>('discoverBluetoothNative');
+    return result?.map((item) => DiscoveredPrinter.fromMap(Map<String, dynamic>.from(item))).toList() ?? [];
+  }
+
+  @override
+  Future<List<DiscoveredPrinter>> testDirectBleConnection({String? macAddress}) async {
+    final result = await methodChannel.invokeMethod<List<dynamic>>('testDirectBleConnection', {
+      if (macAddress != null) 'macAddress': macAddress,
+    });
+    return result?.map((item) => DiscoveredPrinter.fromMap(Map<String, dynamic>.from(item))).toList() ?? [];
   }
 
   @override
@@ -101,6 +115,12 @@ class MethodChannelZebraPrinter extends ZebraPrinterPlatform {
   Future<String?> getSgdParameter(String parameter) async {
     final result = await methodChannel.invokeMethod<String>('getSgdParameter', {'parameter': parameter});
     return result;
+  }
+
+  @override
+  Future<bool> requestBluetoothPermissions() async {
+    final result = await methodChannel.invokeMethod<bool>('requestBluetoothPermissions');
+    return result ?? false;
   }
 
   @override

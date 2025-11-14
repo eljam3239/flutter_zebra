@@ -52,6 +52,16 @@ abstract class ZebraPrinterPlatform extends PlatformInterface {
     throw UnimplementedError('discoverBluetoothPrinters() has not been implemented.');
   }
 
+  /// Discovers Bluetooth devices using native Android scanner (debugging)
+  Future<List<DiscoveredPrinter>> discoverBluetoothNative() {
+    throw UnimplementedError('discoverBluetoothNative() has not been implemented.');
+  }
+
+  /// Tests direct BLE connection to a printer using known MAC address
+  Future<List<DiscoveredPrinter>> testDirectBleConnection({String? macAddress}) {
+    throw UnimplementedError('testDirectBleConnection() has not been implemented.');
+  }
+
   /// Discovers USB printers
   Future<List<DiscoveredPrinter>> discoverUsbPrinters() {
     throw UnimplementedError('discoverUsbPrinters() has not been implemented.');
@@ -75,6 +85,11 @@ abstract class ZebraPrinterPlatform extends PlatformInterface {
   /// Sends raw ZPL or CPCL commands to the printer
   Future<void> sendCommands(String commands, {ZebraPrintLanguage? language}) {
     throw UnimplementedError('sendCommands() has not been implemented.');
+  }
+
+  /// Requests Bluetooth permissions from the user
+  Future<bool> requestBluetoothPermissions() {
+    throw UnimplementedError('requestBluetoothPermissions() has not been implemented.');
   }
 
   /// Gets the printer control language (ZPL or CPCL)

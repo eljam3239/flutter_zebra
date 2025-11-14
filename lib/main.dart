@@ -171,6 +171,154 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  Future<void> _discoverBluetoothPrinters() async {
+    setState(() {
+      _isDiscovering = true;
+    });
+
+    try {
+      print('[Flutter] Starting Bluetooth LE discovery...');
+      final printers = await ZebraPrinter.discoverBluetoothPrinters();
+      print('[Flutter] Bluetooth discovery completed. Found ${printers.length} printers');
+      
+      setState(() {
+        _discoveredPrinters = printers;
+        _selectedPrinter = _discoveredPrinters.isNotEmpty ? _discoveredPrinters.first : null;
+        _isDiscovering = false;
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Bluetooth found ${_discoveredPrinters.length} printers')),
+      );
+    } catch (e) {
+      print('[Flutter] Bluetooth discovery failed: $e');
+      setState(() {
+        _isDiscovering = false;
+      });
+
+      if (!mounted) return;
+      
+      String errorMessage = 'Bluetooth discovery failed: $e';
+      
+      // Check if it's a permissions error and provide helpful guidance
+      if (e.toString().contains('MISSING_PERMISSIONS') || e.toString().contains('permission')) {
+        errorMessage = 'Bluetooth permissions required!\n\n'
+            'Please go to Settings > Apps > Flutter Zebra > Permissions '
+            'and enable:\n• Nearby devices (Bluetooth)\n• Location\n\n'
+            'Then restart the app and try again.';
+      }
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMessage),
+          duration: const Duration(seconds: 8),
+          action: SnackBarAction(
+            label: 'OK',
+            onPressed: () {},
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _discoverBluetoothNative() async {
+    setState(() {
+      _isDiscovering = true;
+    });
+
+    try {
+      print('[Flutter] Starting native Bluetooth scan...');
+      final printers = await ZebraPrinter.discoverBluetoothNative();
+      print('[Flutter] Native Bluetooth scan completed. Found ${printers.length} devices');
+      
+      setState(() {
+        _discoveredPrinters = printers;
+        _selectedPrinter = _discoveredPrinters.isNotEmpty ? _discoveredPrinters.first : null;
+        _isDiscovering = false;
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Native BT scan found ${_discoveredPrinters.length} devices')),
+      );
+    } catch (e) {
+      print('[Flutter] Native Bluetooth scan failed: $e');
+      setState(() {
+        _isDiscovering = false;
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Native BT scan failed: $e')),
+      );
+    }
+  }
+
+  Future<void> _testDirectBleConnection() async {
+    setState(() {
+      _isDiscovering = true;
+    });
+
+    try {
+      print('[Flutter] Testing direct BLE connection to ZD421...');
+      final printers = await ZebraPrinter.testDirectBleConnection();
+      print('[Flutter] Direct BLE test completed. Found ${printers.length} printers');
+      
+      setState(() {
+        _discoveredPrinters = printers;
+        _isDiscovering = false;
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Direct BLE test found ${_discoveredPrinters.length} devices')),
+      );
+    } catch (e) {
+      print('[Flutter] Direct BLE connection test failed: $e');
+      setState(() {
+        _isDiscovering = false;
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Direct BLE test failed: $e')),
+      );
+    }
+  }
+
+  Future<void> _requestBluetoothPermissions() async {
+    try {
+      print('[Flutter] Requesting Bluetooth permissions...');
+      final granted = await ZebraPrinter.requestBluetoothPermissions();
+      
+      if (!mounted) return;
+      
+      if (granted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Bluetooth permissions granted! You can now use Bluetooth discovery.'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Bluetooth permissions denied. Please grant them manually in Settings.'),
+            duration: Duration(seconds: 5),
+          ),
+        );
+      }
+    } catch (e) {
+      print('[Flutter] Permission request failed: $e');
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Permission request failed: $e')),
+      );
+    }
+  }
+
   Future<void> _connectToPrinter() async {
     if (_selectedPrinter == null) {
       if (!mounted) return;
@@ -181,9 +329,13 @@ class _MyHomePageState extends State<MyHomePage> {
     }
 
     try {
-      // Create connection settings based on the selected printer
+      // Create connection settings based on the selected printer's interface type
+      final interfaceType = _selectedPrinter!.interfaceType == 'bluetooth' 
+          ? ZebraInterfaceType.bluetooth
+          : ZebraInterfaceType.tcp;
+      
       final settings = ZebraConnectionSettings(
-        interfaceType: ZebraInterfaceType.tcp,
+        interfaceType: interfaceType,
         identifier: _selectedPrinter!.address,
         timeout: 15000,
       );
@@ -489,6 +641,38 @@ class _MyHomePageState extends State<MyHomePage> {
                             foregroundColor: Colors.white,
                           ),
                           child: const Text('Auto Discover'),
+                        ),
+                        ElevatedButton(
+                          onPressed: _isDiscovering ? null : _discoverBluetoothPrinters,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.teal,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('Discover (Bluetooth)'),
+                        ),
+                        ElevatedButton(
+                          onPressed: _isDiscovering ? null : _discoverBluetoothNative,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.cyan,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('Native BT Scan'),
+                        ),
+                        ElevatedButton(
+                          onPressed: _isDiscovering ? null : _testDirectBleConnection,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.teal,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('Direct BLE Test'),
+                        ),
+                        ElevatedButton(
+                          onPressed: _requestBluetoothPermissions,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.indigo,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('Grant BT Permissions'),
                         ),
                         ElevatedButton(
                           onPressed: _selectedPrinter != null && !_isConnected ? _connectToPrinter : null,

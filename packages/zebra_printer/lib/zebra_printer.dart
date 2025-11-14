@@ -41,6 +41,16 @@ class ZebraPrinter {
     return _platform.discoverBluetoothPrinters();
   }
 
+  /// Discovers Bluetooth devices using native Android scanner (for debugging)
+  static Future<List<DiscoveredPrinter>> discoverBluetoothNative() {
+    return _platform.discoverBluetoothNative();
+  }
+
+  /// Tests direct BLE connection to a printer using known MAC address
+  static Future<List<DiscoveredPrinter>> testDirectBleConnection({String? macAddress}) {
+    return _platform.testDirectBleConnection(macAddress: macAddress);
+  }
+
   /// Discovers USB printers
   static Future<List<DiscoveredPrinter>> discoverUsbPrinters() {
     return _platform.discoverUsbPrinters();
@@ -79,6 +89,11 @@ class ZebraPrinter {
   /// Sets an SGD (Set Get Do) parameter on the printer  
   static Future<void> setSgdParameter(String parameter, String value) {
     return _platform.setSgdParameter(parameter, value);
+  }
+
+  /// Requests Bluetooth permissions from the user (Android only)
+  static Future<bool> requestBluetoothPermissions() {
+    return _platform.requestBluetoothPermissions();
   }
 
   /// Gets the current printer status
