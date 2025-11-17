@@ -7,10 +7,10 @@ Flutter wrapper for Zebra's iOS and Android link-OS sdks.
 2. Add the blah blah file to 
 
 ## Supported
-| Device | ZD421 |
-| -------|-------|
-| iOS    |   TCP    |
-| Android|   TCP    |
+| Device | ZD421 | ZD410 |
+| -------|-------|-------|
+| iOS    |   TCP    | TCP |
+| Android|   TCP    | BTLE |
 
 ## ZPL
 https://zplmagic.com/
