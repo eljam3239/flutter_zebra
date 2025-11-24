@@ -74,6 +74,11 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
     private static final String USB_PERMISSION_ACTION = "com.zebra.zebra_printer_android.USB_PERMISSION";
     private CompletableFuture<Boolean> usbPermissionFuture;
     private BroadcastReceiver usbPermissionReceiver;
+    
+    // Discovery state management
+    private volatile boolean isUsbDiscoveryInProgress = false;
+    private volatile boolean isNetworkDiscoveryInProgress = false;
+    private volatile boolean isBleDiscoveryInProgress = false;
 
     // Helper method to get printer address based on type
     private String getPrinterAddress(DiscoveredPrinter printer) {
@@ -146,8 +151,15 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
     }
 
     private void discoverNetworkPrintersAuto(MethodCall call, Result result) {
+        // Check if discovery is already in progress
+        if (isNetworkDiscoveryInProgress) {
+            result.error("DISCOVERY_IN_PROGRESS", "Network discovery is already in progress. Please wait for it to complete.", null);
+            return;
+        }
+        
         executor.execute(() -> {
             try {
+                isNetworkDiscoveryInProgress = true;
                 Log.d(TAG, "Starting auto network discovery using findPrinters");
                 
                 final List<DiscoveredPrinter> discoveredPrinters = new ArrayList<>();
@@ -236,6 +248,8 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
                 mainHandler.post(() -> {
                     result.error("DISCOVERY_FAILED", e.getMessage(), null);
                 });
+            } finally {
+                isNetworkDiscoveryInProgress = false;
             }
         });
     }
@@ -488,6 +502,12 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
             return;
         }
 
+        // Check if discovery is already in progress
+        if (isBleDiscoveryInProgress) {
+            result.error("DISCOVERY_IN_PROGRESS", "Bluetooth discovery is already in progress. Please wait for it to complete.", null);
+            return;
+        }
+
         // Check for required permissions
         if (!hasBluetoothPermissions()) {
             result.error("MISSING_PERMISSIONS", 
@@ -497,16 +517,15 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
         }
 
         executor.execute(() -> {
-            // Only prepare looper if one doesn't already exist
-            final boolean looperPrepared;
-            if (Looper.myLooper() == null) {
-                Looper.prepare();
-                looperPrepared = true;
-            } else {
-                looperPrepared = false;
-            }
-            
+            boolean looperPrepared = false;
             try {
+                isBleDiscoveryInProgress = true;
+                // Only prepare looper if one doesn't already exist
+                if (Looper.myLooper() == null) {
+                    Looper.prepare();
+                    looperPrepared = true;
+                }
+                
                 Log.d(TAG, "Starting Bluetooth LE discovery...");
                 
                 // Increase SDK discovery timeout to 30 seconds to give slow-advertising devices time to appear
@@ -597,6 +616,7 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
                     result.error("DISCOVERY_FAILED", e.getMessage(), null);
                 });
             } finally {
+                isBleDiscoveryInProgress = false;
                 // Only quit looper if we prepared it
                 if (looperPrepared) {
                     try {
@@ -868,11 +888,21 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
             return;
         }
 
+        // Check if discovery is already in progress
+        if (isUsbDiscoveryInProgress) {
+            result.error("DISCOVERY_IN_PROGRESS", "USB discovery is already in progress. Please wait for it to complete.", null);
+            return;
+        }
+
         Log.d(TAG, "Starting USB printer discovery...");
 
         executor.execute(() -> {
             try {
+                isUsbDiscoveryInProgress = true;
+                
                 final List<DiscoveredPrinter> discoveredPrinters = new ArrayList<>();
+                final Object discoveryLock = new Object();
+                final boolean[] discoveryComplete = {false};
 
                 DiscoveryHandler discoveryHandler = new DiscoveryHandler() {
                     @Override
@@ -899,45 +929,19 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
                     @Override
                     public void discoveryFinished() {
                         Log.d(TAG, "USB discovery finished callback received");
-
-                        List<Map<String, Object>> printers = new ArrayList<>();
-                        synchronized (discoveredPrinters) {
-                            for (DiscoveredPrinter printer : discoveredPrinters) {
-                                Map<String, Object> printerMap = new HashMap<>();
-                                
-                                // Handle USB printers specifically
-                                if (printer instanceof DiscoveredPrinterUsb) {
-                                    DiscoveredPrinterUsb usbPrinter = (DiscoveredPrinterUsb) printer;
-                                    printerMap.put("friendlyName", "USB Printer (" + usbPrinter.device.getProductId() + ")");
-                                    printerMap.put("address", usbPrinter.device.getDeviceName());
-                                    printerMap.put("interfaceType", "usb");
-                                    printerMap.put("productId", usbPrinter.device.getProductId());
-                                    printerMap.put("vendorId", usbPrinter.device.getVendorId());
-                                } else {
-                                    // Fallback to discovery data
-                                    printerMap.put("friendlyName", printer.getDiscoveryDataMap().get("FRIENDLY_NAME"));
-                                    printerMap.put("address", "Unknown USB Device");
-                                    printerMap.put("interfaceType", "usb");
-                                }
-                                
-                                printerMap.put("port", 0);
-                                printerMap.put("serialNumber", printer.getDiscoveryDataMap().get("SERIAL_NUMBER"));
-                                printers.add(printerMap);
-                            }
+                        synchronized (discoveryLock) {
+                            discoveryComplete[0] = true;
+                            discoveryLock.notify();
                         }
-
-                        mainHandler.post(() -> {
-                            Log.d(TAG, "USB discovery completed. Found " + printers.size() + " printers");
-                            result.success(printers);
-                        });
                     }
 
                     @Override
                     public void discoveryError(String message) {
                         Log.e(TAG, "USB discovery error callback: " + message);
-                        mainHandler.post(() -> {
-                            result.error("DISCOVERY_FAILED", message, null);
-                        });
+                        synchronized (discoveryLock) {
+                            discoveryComplete[0] = true;
+                            discoveryLock.notify();
+                        }
                     }
                 };
 
@@ -945,11 +949,52 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
                 // Use the application context for USB discovery
                 UsbDiscoverer.findPrinters(activity.getApplicationContext(), discoveryHandler);
                 
+                // Wait for discovery to complete with timeout
+                synchronized (discoveryLock) {
+                    while (!discoveryComplete[0]) {
+                        discoveryLock.wait(10000); // 10 second timeout for USB discovery
+                        break; // Exit if timeout
+                    }
+                }
+                
+                List<Map<String, Object>> printers = new ArrayList<>();
+                synchronized (discoveredPrinters) {
+                    for (DiscoveredPrinter printer : discoveredPrinters) {
+                        Map<String, Object> printerMap = new HashMap<>();
+                        
+                        // Handle USB printers specifically
+                        if (printer instanceof DiscoveredPrinterUsb) {
+                            DiscoveredPrinterUsb usbPrinter = (DiscoveredPrinterUsb) printer;
+                            printerMap.put("friendlyName", "USB Printer (" + usbPrinter.device.getProductId() + ")");
+                            printerMap.put("address", usbPrinter.device.getDeviceName());
+                            printerMap.put("interfaceType", "usb");
+                            printerMap.put("productId", usbPrinter.device.getProductId());
+                            printerMap.put("vendorId", usbPrinter.device.getVendorId());
+                        } else {
+                            // Fallback to discovery data
+                            printerMap.put("friendlyName", printer.getDiscoveryDataMap().get("FRIENDLY_NAME"));
+                            printerMap.put("address", "Unknown USB Device");
+                            printerMap.put("interfaceType", "usb");
+                        }
+                        
+                        printerMap.put("port", 0);
+                        printerMap.put("serialNumber", printer.getDiscoveryDataMap().get("SERIAL_NUMBER"));
+                        printers.add(printerMap);
+                    }
+                }
+
+                mainHandler.post(() -> {
+                    Log.d(TAG, "USB discovery completed. Found " + printers.size() + " printers");
+                    result.success(printers);
+                });
+                
             } catch (Exception e) {
                 Log.e(TAG, "USB discovery failed", e);
                 mainHandler.post(() -> {
                     result.error("DISCOVERY_FAILED", e.getMessage(), null);
                 });
+            } finally {
+                isUsbDiscoveryInProgress = false;
             }
         });
     }
