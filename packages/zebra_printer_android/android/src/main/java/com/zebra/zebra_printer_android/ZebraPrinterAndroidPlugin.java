@@ -57,6 +57,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.CompletableFuture;
 
 /** ZebraPrinterAndroidPlugin */
 public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandler, ActivityAware {
@@ -68,6 +69,11 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
     private ZebraPrinter zebraPrinter;
     private ExecutorService executor = Executors.newCachedThreadPool();
     private Handler mainHandler = new Handler(Looper.getMainLooper());
+    
+    // USB permission handling
+    private static final String USB_PERMISSION_ACTION = "com.zebra.zebra_printer_android.USB_PERMISSION";
+    private CompletableFuture<Boolean> usbPermissionFuture;
+    private BroadcastReceiver usbPermissionReceiver;
 
     // Helper method to get printer address based on type
     private String getPrinterAddress(DiscoveredPrinter printer) {
@@ -345,27 +351,45 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
                         throw new Exception("USB printer not found: " + identifier);
                     }
                     
-                    // Check if we have USB permission
-                    UsbManager usbManager = (UsbManager) activity.getSystemService(Context.USB_SERVICE);
-                    if (!usbManager.hasPermission(foundUsbPrinter[0].device)) {
-                        // Try to request permission
-                        String usbPermissionAction = "com.zebra.zebra_printer_android.USB_PERMISSION";
-                        Intent intent = new Intent(usbPermissionAction);
-                        PendingIntent permissionIntent = PendingIntent.getBroadcast(
-                            activity, 
-                            0, 
-                            intent, 
-                            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-                        );
-                        
-                        usbManager.requestPermission(foundUsbPrinter[0].device, permissionIntent);
-                        
-                        throw new Exception("USB permission required for device: " + foundUsbPrinter[0].device.getDeviceName() + 
-                            ". Permission request sent - please grant permission and try connecting again.");
-                    }
+                    // Request USB permission asynchronously
+                    CompletableFuture<Boolean> permissionFuture = requestUsbPermissionAsync(foundUsbPrinter[0].device);
                     
-                    // Get USB connection
-                    activeConnection = foundUsbPrinter[0].getConnection();
+                    permissionFuture.thenAccept(granted -> {
+                        if (!granted) {
+                            mainHandler.post(() -> result.error("USB_PERMISSION_DENIED", "USB permission was denied", null));
+                            return;
+                        }
+                        
+                        try {
+                            // Get USB connection
+                            activeConnection = foundUsbPrinter[0].getConnection();
+                            
+                            if (activeConnection == null) {
+                                mainHandler.post(() -> result.error("CONNECTION_ERROR", "Failed to create USB connection", null));
+                                return;
+                            }
+                            
+                            activeConnection.open();
+                            
+                            // Create ZebraPrinter instance
+                            zebraPrinter = ZebraPrinterFactory.getInstance(activeConnection);
+
+                            mainHandler.post(() -> {
+                                Log.d(TAG, "Successfully connected to USB printer");
+                                result.success(true);
+                            });
+                        } catch (Exception e) {
+                            Log.e(TAG, "USB connection failed after permission granted", e);
+                            mainHandler.post(() -> result.error("CONNECTION_ERROR", "USB connection failed: " + e.getMessage(), null));
+                        }
+                    }).exceptionally(throwable -> {
+                        Log.e(TAG, "USB permission request failed", throwable);
+                        mainHandler.post(() -> result.error("USB_PERMISSION_ERROR", "USB permission request failed: " + throwable.getMessage(), null));
+                        return null;
+                    });
+                    
+                    // Return early for USB - the completion will be handled asynchronously
+                    return;
                 }
                 
                 if (activeConnection == null) {
@@ -1317,6 +1341,66 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
         });
     }
 
+    private void setupUsbPermissionReceiver() {
+        if (usbPermissionReceiver == null && activity != null) {
+            usbPermissionReceiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    String action = intent.getAction();
+                    if (USB_PERMISSION_ACTION.equals(action)) {
+                        boolean granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false);
+                        if (usbPermissionFuture != null) {
+                            usbPermissionFuture.complete(granted);
+                        }
+                    }
+                }
+            };
+            
+            IntentFilter filter = new IntentFilter(USB_PERMISSION_ACTION);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                activity.registerReceiver(usbPermissionReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                activity.registerReceiver(usbPermissionReceiver, filter);
+            }
+        }
+    }
+    
+    private void cleanupUsbPermissionReceiver() {
+        if (usbPermissionReceiver != null && activity != null) {
+            try {
+                activity.unregisterReceiver(usbPermissionReceiver);
+            } catch (Exception e) {
+                Log.e(TAG, "Error unregistering USB permission receiver", e);
+            }
+            usbPermissionReceiver = null;
+        }
+        
+        if (usbPermissionFuture != null && !usbPermissionFuture.isDone()) {
+            usbPermissionFuture.complete(false);
+        }
+    }
+    
+    private CompletableFuture<Boolean> requestUsbPermissionAsync(UsbDevice device) {
+        UsbManager usbManager = (UsbManager) activity.getSystemService(Context.USB_SERVICE);
+        
+        if (usbManager.hasPermission(device)) {
+            return CompletableFuture.completedFuture(true);
+        }
+        
+        usbPermissionFuture = new CompletableFuture<>();
+        
+        Intent intent = new Intent(USB_PERMISSION_ACTION);
+        PendingIntent permissionIntent = PendingIntent.getBroadcast(
+            activity, 
+            0, 
+            intent, 
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        
+        usbManager.requestPermission(device, permissionIntent);
+        return usbPermissionFuture;
+    }
+
     @Override
     public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
         channel.setMethodCallHandler(null);
@@ -1336,20 +1420,24 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
     @Override
     public void onAttachedToActivity(@NonNull ActivityPluginBinding binding) {
         activity = binding.getActivity();
+        setupUsbPermissionReceiver();
     }
 
     @Override
     public void onDetachedFromActivityForConfigChanges() {
+        cleanupUsbPermissionReceiver();
         activity = null;
     }
 
     @Override
     public void onReattachedToActivityForConfigChanges(@NonNull ActivityPluginBinding binding) {
         activity = binding.getActivity();
+        setupUsbPermissionReceiver();
     }
 
     @Override
     public void onDetachedFromActivity() {
+        cleanupUsbPermissionReceiver();
         activity = null;
     }
 }
