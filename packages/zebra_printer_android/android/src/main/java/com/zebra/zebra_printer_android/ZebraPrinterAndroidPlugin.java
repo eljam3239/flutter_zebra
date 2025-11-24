@@ -39,6 +39,8 @@ import com.zebra.sdk.printer.discovery.DiscoveredPrinterNetwork;
 import com.zebra.sdk.printer.discovery.DiscoveryHandler;
 import com.zebra.sdk.printer.discovery.DiscoveryException;
 import com.zebra.sdk.printer.discovery.NetworkDiscoverer;
+import com.zebra.sdk.printer.discovery.UsbDiscoverer;
+import com.zebra.sdk.printer.discovery.DiscoveredPrinterUsb;
 import com.zebra.sdk.printer.ZebraPrinter;
 import com.zebra.sdk.printer.ZebraPrinterFactory;
 import com.zebra.sdk.printer.ZebraPrinterLanguageUnknownException;
@@ -100,6 +102,9 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
                 break;
             case "testDirectBleConnection":
                 testDirectBleConnection(call, result);
+                break;
+            case "discoverUsbPrinters":
+                discoverUsbPrinters(call, result);
                 break;
             case "requestBluetoothPermissions":
                 requestBluetoothPermissions(result);
@@ -747,6 +752,98 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
                 } catch (Exception closeEx) {
                     Log.w(TAG, "Error closing BLE connection", closeEx);
                 }
+            }
+        });
+    }
+
+    private void discoverUsbPrinters(MethodCall call, Result result) {
+        if (activity == null) {
+            result.error("NO_ACTIVITY", "Activity context is required for USB discovery", null);
+            return;
+        }
+
+        Log.d(TAG, "Starting USB printer discovery...");
+
+        executor.execute(() -> {
+            try {
+                final List<DiscoveredPrinter> discoveredPrinters = new ArrayList<>();
+
+                DiscoveryHandler discoveryHandler = new DiscoveryHandler() {
+                    @Override
+                    public void foundPrinter(DiscoveredPrinter discoveredPrinter) {
+                        Log.d(TAG, "Found USB printer!");
+                        
+                        // Check if this is specifically a USB printer
+                        if (discoveredPrinter instanceof DiscoveredPrinterUsb) {
+                            DiscoveredPrinterUsb usbPrinter = (DiscoveredPrinterUsb) discoveredPrinter;
+                            Log.d(TAG, "  USB Device: " + usbPrinter.device.getDeviceName());
+                            Log.d(TAG, "  USB Product ID: " + usbPrinter.device.getProductId());
+                            Log.d(TAG, "  USB Vendor ID: " + usbPrinter.device.getVendorId());
+                        }
+                        
+                        Map<String, String> discoveryData = discoveredPrinter.getDiscoveryDataMap();
+                        Log.d(TAG, "  FRIENDLY_NAME: " + discoveryData.get("FRIENDLY_NAME"));
+                        Log.d(TAG, "  All discovery data: " + discoveryData.toString());
+
+                        synchronized (discoveredPrinters) {
+                            discoveredPrinters.add(discoveredPrinter);
+                        }
+                    }
+
+                    @Override
+                    public void discoveryFinished() {
+                        Log.d(TAG, "USB discovery finished callback received");
+
+                        List<Map<String, Object>> printers = new ArrayList<>();
+                        synchronized (discoveredPrinters) {
+                            for (DiscoveredPrinter printer : discoveredPrinters) {
+                                Map<String, Object> printerMap = new HashMap<>();
+                                
+                                // Handle USB printers specifically
+                                if (printer instanceof DiscoveredPrinterUsb) {
+                                    DiscoveredPrinterUsb usbPrinter = (DiscoveredPrinterUsb) printer;
+                                    printerMap.put("friendlyName", "USB Printer (" + usbPrinter.device.getProductId() + ")");
+                                    printerMap.put("address", usbPrinter.device.getDeviceName());
+                                    printerMap.put("interfaceType", "usb");
+                                    printerMap.put("productId", usbPrinter.device.getProductId());
+                                    printerMap.put("vendorId", usbPrinter.device.getVendorId());
+                                } else {
+                                    // Fallback to discovery data
+                                    printerMap.put("friendlyName", printer.getDiscoveryDataMap().get("FRIENDLY_NAME"));
+                                    printerMap.put("address", "Unknown USB Device");
+                                    printerMap.put("interfaceType", "usb");
+                                }
+                                
+                                printerMap.put("port", 0);
+                                printerMap.put("serialNumber", printer.getDiscoveryDataMap().get("SERIAL_NUMBER"));
+                                printers.add(printerMap);
+                            }
+                        }
+
+                        mainHandler.post(() -> {
+                            Log.d(TAG, "USB discovery completed. Found " + printers.size() + " printers");
+                            result.success(printers);
+                        });
+                    }
+
+                    @Override
+                    public void discoveryError(String message) {
+                        Log.e(TAG, "USB discovery error callback: " + message);
+                        mainHandler.post(() -> {
+                            result.error("DISCOVERY_FAILED", message, null);
+                        });
+                    }
+                };
+
+                Log.d(TAG, "Starting UsbDiscoverer.findPrinters...");
+                // Use the application context for USB discovery
+                UsbDiscoverer.findPrinters(activity.getApplicationContext(), discoveryHandler);
+                
+            } catch (Exception e) {
+                Log.e(TAG, "USB discovery failed", e);
+                mainHandler.post(() -> {
+                    result.error("DISCOVERY_FAILED", e.getMessage(), null);
+                });
             }
         });
     }

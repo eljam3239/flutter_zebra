@@ -301,14 +301,36 @@ class _MyHomePageState extends State<MyHomePage> {
       return;
     }
 
-    // Android implementation - for now just show success message
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('USB discovery pressed successfully (Android)'),
-        duration: Duration(seconds: 2),
-      ),
-    );
+    // Android implementation - discover USB printers
+    setState(() {
+      _isDiscovering = true;
+    });
+
+    try {
+      print('[Flutter] Starting USB printer discovery...');
+      final printers = await ZebraPrinter.discoverUsbPrinters();
+      print('[Flutter] USB discovery completed. Found ${printers.length} printers');
+      
+      setState(() {
+        _discoveredPrinters = printers;
+        _isDiscovering = false;
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('USB discovery found ${_discoveredPrinters.length} printers')),
+      );
+    } catch (e) {
+      print('[Flutter] USB discovery failed: $e');
+      setState(() {
+        _isDiscovering = false;
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('USB discovery failed: $e')),
+      );
+    }
   }
 
   Future<void> _requestBluetoothPermissions() async {
@@ -691,7 +713,7 @@ class _MyHomePageState extends State<MyHomePage> {
                           child: const Text('Direct BLE Test'),
                         ),
                         ElevatedButton(
-                          onPressed: _discoverUsbPrinters,
+                          onPressed: _isDiscovering ? null : _discoverUsbPrinters,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.brown,
                             foregroundColor: Colors.white,
