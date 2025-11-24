@@ -96,6 +96,11 @@ class ZebraPrinter {
     return _platform.requestBluetoothPermissions();
   }
 
+  /// Requests USB permissions for a specific device (Android only)
+  static Future<bool> requestUsbPermissions({required String deviceName}) {
+    return _platform.requestUsbPermissions(deviceName: deviceName);
+  }
+
   /// Gets the current printer status
   static Future<PrinterStatus> getStatus() {
     return _platform.getStatus();

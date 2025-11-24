@@ -376,9 +376,14 @@ class _MyHomePageState extends State<MyHomePage> {
 
     try {
       // Create connection settings based on the selected printer's interface type
-      final interfaceType = _selectedPrinter!.interfaceType == 'bluetooth' 
-          ? ZebraInterfaceType.bluetooth
-          : ZebraInterfaceType.tcp;
+      ZebraInterfaceType interfaceType;
+      if (_selectedPrinter!.interfaceType == 'bluetooth') {
+        interfaceType = ZebraInterfaceType.bluetooth;
+      } else if (_selectedPrinter!.interfaceType == 'usb') {
+        interfaceType = ZebraInterfaceType.usb;
+      } else {
+        interfaceType = ZebraInterfaceType.tcp;
+      }
       
       final settings = ZebraConnectionSettings(
         interfaceType: interfaceType,

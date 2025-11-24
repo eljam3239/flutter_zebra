@@ -1,6 +1,7 @@
 package com.zebra.zebra_printer_android;
 
 import android.app.Activity;
+import android.app.PendingIntent;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
@@ -9,8 +10,13 @@ import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanFilter;
 import android.bluetooth.le.ScanResult;
 import android.bluetooth.le.ScanSettings;
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.hardware.usb.UsbDevice;
+import android.hardware.usb.UsbManager;
 import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Handler;
@@ -108,6 +114,9 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
                 break;
             case "requestBluetoothPermissions":
                 requestBluetoothPermissions(result);
+                break;
+            case "requestUsbPermissions":
+                requestUsbPermissions(call, result);
                 break;
             case "connect":
                 connect(call, result);
@@ -242,9 +251,11 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
             return;
         }
 
-        // Support both TCP and Bluetooth connections
-        if (!"tcp".equalsIgnoreCase(interfaceType) && !"bluetooth".equalsIgnoreCase(interfaceType)) {
-            result.error("UNSUPPORTED_INTERFACE", "Only TCP and Bluetooth interfaces are currently supported", null);
+        // Support TCP, Bluetooth, and USB connections
+        if (!"tcp".equalsIgnoreCase(interfaceType) && 
+            !"bluetooth".equalsIgnoreCase(interfaceType) && 
+            !"usb".equalsIgnoreCase(interfaceType)) {
+            result.error("UNSUPPORTED_INTERFACE", "Only TCP, Bluetooth, and USB interfaces are currently supported", null);
             return;
         }
 
@@ -284,6 +295,77 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
                     if (activeConnection instanceof BluetoothLeConnection) {
                         ((BluetoothLeConnection) activeConnection).setContext(activity);
                     }
+                } else if ("usb".equalsIgnoreCase(interfaceType)) {
+                    // USB connections require the DiscoveredPrinterUsb object
+                    // For now, we'll need to discover the printer again to get the connection
+                    Log.d(TAG, "Creating USB connection for device: " + identifier);
+                    
+                    // Find the USB printer by discovering again
+                    final DiscoveredPrinterUsb[] foundUsbPrinter = new DiscoveredPrinterUsb[1];
+                    final boolean[] discoveryComplete = new boolean[1];
+                    
+                    DiscoveryHandler usbDiscoveryHandler = new DiscoveryHandler() {
+                        @Override
+                        public void foundPrinter(DiscoveredPrinter discoveredPrinter) {
+                            if (discoveredPrinter instanceof DiscoveredPrinterUsb) {
+                                DiscoveredPrinterUsb usbPrinter = (DiscoveredPrinterUsb) discoveredPrinter;
+                                if (identifier.equals(usbPrinter.device.getDeviceName()) ||
+                                    identifier.contains(String.valueOf(usbPrinter.device.getProductId()))) {
+                                    foundUsbPrinter[0] = usbPrinter;
+                                }
+                            }
+                        }
+
+                        @Override
+                        public void discoveryFinished() {
+                            discoveryComplete[0] = true;
+                        }
+
+                        @Override
+                        public void discoveryError(String message) {
+                            discoveryComplete[0] = true;
+                        }
+                    };
+                    
+                    UsbDiscoverer.findPrinters(activity.getApplicationContext(), usbDiscoveryHandler);
+                    
+                    // Wait for discovery to complete (timeout after 5 seconds)
+                    int waitCount = 0;
+                    while (!discoveryComplete[0] && waitCount < 50) {
+                        try {
+                            Thread.sleep(100);
+                            waitCount++;
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            break;
+                        }
+                    }
+                    
+                    if (foundUsbPrinter[0] == null) {
+                        throw new Exception("USB printer not found: " + identifier);
+                    }
+                    
+                    // Check if we have USB permission
+                    UsbManager usbManager = (UsbManager) activity.getSystemService(Context.USB_SERVICE);
+                    if (!usbManager.hasPermission(foundUsbPrinter[0].device)) {
+                        // Try to request permission
+                        String usbPermissionAction = "com.zebra.zebra_printer_android.USB_PERMISSION";
+                        Intent intent = new Intent(usbPermissionAction);
+                        PendingIntent permissionIntent = PendingIntent.getBroadcast(
+                            activity, 
+                            0, 
+                            intent, 
+                            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+                        );
+                        
+                        usbManager.requestPermission(foundUsbPrinter[0].device, permissionIntent);
+                        
+                        throw new Exception("USB permission required for device: " + foundUsbPrinter[0].device.getDeviceName() + 
+                            ". Permission request sent - please grant permission and try connecting again.");
+                    }
+                    
+                    // Get USB connection
+                    activeConnection = foundUsbPrinter[0].getConnection();
                 }
                 
                 if (activeConnection == null) {
@@ -895,6 +977,93 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
         // A full implementation would use ActivityCompat.requestPermissions()
         result.error("PERMISSION_DENIED", 
             "Please grant Bluetooth and location permissions in system settings", null);
+    }
+
+    private void requestUsbPermissions(MethodCall call, Result result) {
+        if (activity == null) {
+            result.error("NO_ACTIVITY", "Activity context is required for USB permission requests", null);
+            return;
+        }
+
+        String deviceName = call.hasArgument("deviceName") ? (String) call.argument("deviceName") : null;
+        
+        if (deviceName == null) {
+            result.error("MISSING_ARGUMENT", "Device name is required for USB permission request", null);
+            return;
+        }
+
+        Log.d(TAG, "Requesting USB permission for device: " + deviceName);
+
+        executor.execute(() -> {
+            try {
+                UsbManager usbManager = (UsbManager) activity.getSystemService(Context.USB_SERVICE);
+                if (usbManager == null) {
+                    mainHandler.post(() -> {
+                        result.error("NO_USB_SERVICE", "USB service not available", null);
+                    });
+                    return;
+                }
+
+                // Find the USB device
+                UsbDevice targetDevice = null;
+                for (UsbDevice device : usbManager.getDeviceList().values()) {
+                    if (deviceName.equals(device.getDeviceName()) || 
+                        deviceName.contains(String.valueOf(device.getProductId()))) {
+                        targetDevice = device;
+                        break;
+                    }
+                }
+
+                final UsbDevice finalTargetDevice = targetDevice; // Make it final for lambda usage
+
+                if (finalTargetDevice == null) {
+                    mainHandler.post(() -> {
+                        result.error("DEVICE_NOT_FOUND", "USB device not found: " + deviceName, null);
+                    });
+                    return;
+                }
+
+                // Check if permission is already granted
+                if (usbManager.hasPermission(finalTargetDevice)) {
+                    mainHandler.post(() -> {
+                        result.success(true);
+                    });
+                    return;
+                }
+
+                // For now, inform user that USB permission needs to be granted manually
+                // A full implementation would use PendingIntent and BroadcastReceiver
+                mainHandler.post(() -> {
+                    // Try to request permission using the system dialog
+                    try {
+                        String usbPermissionAction = "com.zebra.zebra_printer_android.USB_PERMISSION";
+                        Intent intent = new Intent(usbPermissionAction);
+                        PendingIntent permissionIntent = PendingIntent.getBroadcast(
+                            activity, 
+                            0, 
+                            intent, 
+                            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+                        );
+                        
+                        usbManager.requestPermission(finalTargetDevice, permissionIntent);
+                        
+                        // Since we can't wait for the broadcast receiver in this simple implementation,
+                        // we'll inform the user that permission was requested
+                        result.success(false); // Permission requested, but not yet granted
+                        
+                    } catch (Exception e) {
+                        result.error("PERMISSION_REQUEST_FAILED", 
+                            "Failed to request USB permission: " + e.getMessage(), null);
+                    }
+                });
+
+            } catch (Exception e) {
+                Log.e(TAG, "Error requesting USB permission", e);
+                mainHandler.post(() -> {
+                    result.error("PERMISSION_ERROR", "Error requesting USB permission: " + e.getMessage(), null);
+                });
+            }
+        });
     }
 
     private void discoverPrinters(MethodCall call, Result result) {

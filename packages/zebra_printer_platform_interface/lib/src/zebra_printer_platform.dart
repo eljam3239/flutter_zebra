@@ -92,6 +92,11 @@ abstract class ZebraPrinterPlatform extends PlatformInterface {
     throw UnimplementedError('requestBluetoothPermissions() has not been implemented.');
   }
 
+  /// Requests USB permissions for a specific device
+  Future<bool> requestUsbPermissions({required String deviceName}) {
+    throw UnimplementedError('requestUsbPermissions() has not been implemented.');
+  }
+
   /// Gets the printer control language (ZPL or CPCL)
   Future<ZebraPrintLanguage> getPrinterLanguage() {
     throw UnimplementedError('getPrinterLanguage() has not been implemented.');

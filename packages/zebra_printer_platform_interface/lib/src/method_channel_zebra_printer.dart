@@ -124,6 +124,14 @@ class MethodChannelZebraPrinter extends ZebraPrinterPlatform {
   }
 
   @override
+  Future<bool> requestUsbPermissions({required String deviceName}) async {
+    final result = await methodChannel.invokeMethod<bool>('requestUsbPermissions', {
+      'deviceName': deviceName,
+    });
+    return result ?? false;
+  }
+
+  @override
   Future<void> setSgdParameter(String parameter, String value) async {
     await methodChannel.invokeMethod<void>('setSgdParameter', {
       'parameter': parameter,
