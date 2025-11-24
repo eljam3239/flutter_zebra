@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:zebra_printer/zebra_printer.dart';
 
 void main() {
@@ -285,6 +286,29 @@ class _MyHomePageState extends State<MyHomePage> {
         SnackBar(content: Text('Direct BLE test failed: $e')),
       );
     }
+  }
+
+  Future<void> _discoverUsbPrinters() async {
+    // Check if running on iOS
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('iOS doesn\'t support USB discovery or printing'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    // Android implementation - for now just show success message
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('USB discovery pressed successfully (Android)'),
+        duration: Duration(seconds: 2),
+      ),
+    );
   }
 
   Future<void> _requestBluetoothPermissions() async {
@@ -665,6 +689,14 @@ class _MyHomePageState extends State<MyHomePage> {
                             foregroundColor: Colors.white,
                           ),
                           child: const Text('Direct BLE Test'),
+                        ),
+                        ElevatedButton(
+                          onPressed: _discoverUsbPrinters,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.brown,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('Discover USB'),
                         ),
                         ElevatedButton(
                           onPressed: _requestBluetoothPermissions,
