@@ -7,6 +7,7 @@
 #import "ZebraPrinterFactory.h"
 #import "TcpPrinterConnection.h"
 #import "MfiBtPrinterConnection.h"
+#import <ExternalAccessory/ExternalAccessory.h>
 #import <ifaddrs.h>
 #import <arpa/inet.h>
 #import <net/if.h>
@@ -241,8 +242,41 @@
 }
 
 - (void)discoverBluetoothPrintersWithResult:(FlutterResult)result {
-  // TODO: Implement Bluetooth discovery
-  result(@[]);
+  NSLog(@"[ZebraPrinter] Starting Bluetooth Classic discovery via ExternalAccessory");
+  
+  // Get all connected external accessories
+  EAAccessoryManager *accessoryManager = [EAAccessoryManager sharedAccessoryManager];
+  NSArray *connectedAccessories = [accessoryManager connectedAccessories];
+  
+  NSMutableArray *discoveredPrinters = [[NSMutableArray alloc] init];
+  
+  NSLog(@"[ZebraPrinter] Found %lu connected accessories", (unsigned long)[connectedAccessories count]);
+  
+  // Look for Zebra printers in connected accessories
+  for (EAAccessory *accessory in connectedAccessories) {
+    NSLog(@"[ZebraPrinter] Checking accessory: %@ (Serial: %@)", accessory.name, accessory.serialNumber);
+    NSLog(@"[ZebraPrinter] Protocol strings: %@", accessory.protocolStrings);
+    
+    // Check if this accessory supports the Zebra raw port protocol
+    if ([accessory.protocolStrings indexOfObject:@"com.zebra.rawport"] != NSNotFound) {
+      NSLog(@"[ZebraPrinter] Found Zebra printer: %@", accessory.name);
+      
+      // Create a discovered printer entry
+      NSMutableDictionary *printerDict = [[NSMutableDictionary alloc] init];
+      [printerDict setObject:(accessory.name ?: @"Zebra Bluetooth Printer") forKey:@"friendlyName"];
+      [printerDict setObject:(accessory.serialNumber ?: @"Unknown") forKey:@"address"];
+      [printerDict setObject:@"bluetooth" forKey:@"interfaceType"];
+      [printerDict setObject:@0 forKey:@"port"];
+      [printerDict setObject:(accessory.serialNumber ?: @"Unknown") forKey:@"serialNumber"];
+      [printerDict setObject:(accessory.manufacturer ?: @"Zebra") forKey:@"manufacturer"];
+      [printerDict setObject:(accessory.modelNumber ?: @"Unknown") forKey:@"modelNumber"];
+      
+      [discoveredPrinters addObject:printerDict];
+    }
+  }
+  
+  NSLog(@"[ZebraPrinter] Bluetooth discovery completed. Found %lu Zebra printers", (unsigned long)[discoveredPrinters count]);
+  result(discoveredPrinters);
 }
 
 - (void)discoverUsbPrintersWithResult:(FlutterResult)result {
@@ -303,7 +337,7 @@
     return;
   }
 
-  // Only implement TCP connect for now
+  // Only implement TCP and Bluetooth connect for now
   if ([[interfaceType lowercaseString] isEqualToString:@"tcp"]) {
     // Default port 9100 unless the identifier supplies one (not currently supported)
     NSInteger port = 9100;
@@ -328,22 +362,6 @@
       self.activeConnection = conn;
       NSLog(@"[ZebraPrinter] Connected to %@:%ld successfully", identifier, (long)port);
 
-      // Comment out auto-print on connection - moved to Print Receipt/Label buttons
-      /*
-      // Send a simple test print to verify the connection works
-      NSString *testZpl = @"^XA^FO20,20^A0N,25,25^FDZebra Flutter Test Print^FS^FO20,60^A0N,20,20^FDConnection Success!^FS^XZ";
-      NSError *printError = nil;
-      NSData *zplData = [testZpl dataUsingEncoding:NSUTF8StringEncoding];
-      
-      NSInteger bytesWritten = [conn write:zplData error:&printError];
-      if (printError || bytesWritten <= 0) {
-        NSLog(@"[ZebraPrinter] Test print failed: %@ (bytes written: %ld)", printError.localizedDescription, (long)bytesWritten);
-        // Don't fail the connection for print errors, just log them
-      } else {
-        NSLog(@"[ZebraPrinter] Test print sent successfully (%ld bytes)", (long)bytesWritten);
-      }
-      */
-
       // Return success (void)
       result(nil);
       return;
@@ -352,9 +370,66 @@
       result([FlutterError errorWithCode:@"CONNECTION_EXCEPTION" message:ex.reason details:nil]);
       return;
     }
+  } else if ([[interfaceType lowercaseString] isEqualToString:@"bluetooth"]) {
+    // Bluetooth Classic connection using MfiBtPrinterConnection
+    // identifier should be the serial number of the accessory
+    NSLog(@"[ZebraPrinter] Attempting Bluetooth connection to serial number: %@", identifier);
+
+    @try {
+      // Verify the accessory is still connected
+      EAAccessoryManager *accessoryManager = [EAAccessoryManager sharedAccessoryManager];
+      NSArray *connectedAccessories = [accessoryManager connectedAccessories];
+      
+      EAAccessory *targetAccessory = nil;
+      for (EAAccessory *accessory in connectedAccessories) {
+        if ([accessory.serialNumber isEqualToString:identifier] &&
+            [accessory.protocolStrings indexOfObject:@"com.zebra.rawport"] != NSNotFound) {
+          targetAccessory = accessory;
+          break;
+        }
+      }
+      
+      if (!targetAccessory) {
+        NSLog(@"[ZebraPrinter] Bluetooth accessory not found or not connected: %@", identifier);
+        result([FlutterError errorWithCode:@"ACCESSORY_NOT_FOUND" 
+                                   message:@"Bluetooth accessory not found. Please ensure the printer is paired and connected in iOS Settings." 
+                                   details:nil]);
+        return;
+      }
+
+      // Create MfiBtPrinterConnection with the serial number
+      MfiBtPrinterConnection *conn = [[MfiBtPrinterConnection alloc] initWithSerialNumber:identifier];
+      
+      // Apply timeout if provided
+      if (timeout && ![timeout isKindOfClass:[NSNull class]] && [timeout integerValue] > 0) {
+        // Note: MfiBtPrinterConnection doesn't have setMaxTimeoutForOpen, but has read/write timeouts
+        // We can optionally set timeouts for read/write operations here if needed
+      }
+
+      BOOL opened = [conn open];
+      if (!opened) {
+        NSLog(@"[ZebraPrinter] Bluetooth open failed for %@", identifier);
+        result([FlutterError errorWithCode:@"CONNECTION_FAILED" message:@"Failed to open Bluetooth connection" details:nil]);
+        return;
+      }
+
+      // Save active connection
+      self.activeConnection = conn;
+      NSLog(@"[ZebraPrinter] Connected to Bluetooth printer %@ successfully", identifier);
+
+      // Return success (void)
+      result(nil);
+      return;
+    } @catch (NSException *ex) {
+      NSLog(@"[ZebraPrinter] Exception while connecting to Bluetooth: %@", ex);
+      result([FlutterError errorWithCode:@"CONNECTION_EXCEPTION" message:ex.reason details:nil]);
+      return;
+    }
   } else {
     // Unsupported interface type at present
-    result([FlutterError errorWithCode:@"UNSUPPORTED_INTERFACE" message:@"Only TCP connect is implemented on iOS plugin" details:nil]);
+    result([FlutterError errorWithCode:@"UNSUPPORTED_INTERFACE" 
+                               message:[NSString stringWithFormat:@"Interface type '%@' is not supported on iOS. Supported types: TCP, Bluetooth", interfaceType] 
+                               details:nil]);
     return;
   }
 }
