@@ -70,28 +70,13 @@ class _MyHomePageState extends State<MyHomePage> {
       print('[Flutter] Discovery completed. Found ${printers.length} printers');
       
       setState(() {
-        // Don't clear - merge with existing discoveries
-        // _discoveredPrinters.clear(); // Removed this line
-        
-        // Add new printers with deduplication based on address
-        final uniquePrinters = <String, DiscoveredPrinter>{};
-        
-        // First add existing printers
-        for (final printer in _discoveredPrinters) {
-          uniquePrinters[printer.address] = printer;
-        }
-        
-        // Then add new discoveries (will overwrite duplicates)
-        for (final printer in printers) {
-          uniquePrinters[printer.address] = printer;
-        }
-        
-        _discoveredPrinters = uniquePrinters.values.toList();
+        // Merge with existing discoveries - allow duplicates for different interfaces
+        _discoveredPrinters.addAll(printers);
         
         // Preserve selected printer reference if it still exists, otherwise select first
         if (_selectedPrinter != null) {
           final matchingPrinter = _discoveredPrinters
-              .where((p) => p.address == _selectedPrinter!.address)
+              .where((p) => p.address == _selectedPrinter!.address && p.interfaceType == _selectedPrinter!.interfaceType)
               .firstOrNull;
           _selectedPrinter = matchingPrinter ?? (_discoveredPrinters.isNotEmpty ? _discoveredPrinters.first : null);
         } else {
@@ -130,26 +115,18 @@ class _MyHomePageState extends State<MyHomePage> {
       print('[Flutter] Multicast discovery completed. Found ${printers.length} printers');
       
       setState(() {
-        // Clear the list first to avoid duplicates
-        _discoveredPrinters.clear();
-        
-        // Add new printers with deduplication based on address
-        final uniquePrinters = <String, DiscoveredPrinter>{};
-        for (final printer in printers) {
-          uniquePrinters[printer.address] = printer;
-        }
-        _discoveredPrinters = uniquePrinters.values.toList();
+        // Add new printers - allow duplicates for different interfaces
+        _discoveredPrinters.addAll(printers);
         
         // Preserve selected printer reference if it still exists, otherwise select first
         if (_selectedPrinter != null) {
           final matchingPrinter = _discoveredPrinters
-              .where((p) => p.address == _selectedPrinter!.address)
+              .where((p) => p.address == _selectedPrinter!.address && p.interfaceType == _selectedPrinter!.interfaceType)
               .firstOrNull;
           _selectedPrinter = matchingPrinter ?? (_discoveredPrinters.isNotEmpty ? _discoveredPrinters.first : null);
         } else {
           _selectedPrinter = _discoveredPrinters.isNotEmpty ? _discoveredPrinters.first : null;
         }
-        
         _isDiscovering = false;
       });
 
@@ -182,15 +159,8 @@ class _MyHomePageState extends State<MyHomePage> {
       print('[Flutter] Subnet discovery completed. Found ${printers.length} printers');
       
       setState(() {
-        // Clear the list first to avoid duplicates
-        _discoveredPrinters.clear();
-        
-        // Add new printers with deduplication based on address
-        final uniquePrinters = <String, DiscoveredPrinter>{};
-        for (final printer in printers) {
-          uniquePrinters[printer.address] = printer;
-        }
-        _discoveredPrinters = uniquePrinters.values.toList();
+        // Add new printers - allow duplicates for different interfaces
+        _discoveredPrinters.addAll(printers);
         
         _selectedPrinter = _discoveredPrinters.isNotEmpty ? _discoveredPrinters.first : null;
         _isDiscovering = false;
@@ -213,6 +183,11 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
   Future<void> _discoverAll() async {
+    // Clear discoveries at the beginning of the comprehensive discovery
+    setState(() {
+      _discoveredPrinters.clear();
+    });
+    
     //if iOS, skip USB discovery
     if (defaultTargetPlatform == TargetPlatform.iOS) {
       await _discoverNetworkPrintersAuto();
@@ -242,15 +217,8 @@ class _MyHomePageState extends State<MyHomePage> {
       print('[Flutter] Auto discovery completed. Found ${printers.length} printers');
       
       setState(() {
-        // Clear the list first to avoid duplicates
-        _discoveredPrinters.clear();
-        
-        // Add new printers with deduplication based on address
-        final uniquePrinters = <String, DiscoveredPrinter>{};
-        for (final printer in printers) {
-          uniquePrinters[printer.address] = printer;
-        }
-        _discoveredPrinters = uniquePrinters.values.toList();
+        // Add new printers - allow duplicates for different interfaces
+        _discoveredPrinters.addAll(printers);
         
         _selectedPrinter = _discoveredPrinters.isNotEmpty ? _discoveredPrinters.first : null;
         _isDiscovering = false;
@@ -284,23 +252,8 @@ class _MyHomePageState extends State<MyHomePage> {
       print('[Flutter] Bluetooth discovery completed. Found ${printers.length} printers');
       
       setState(() {
-        // Don't clear - merge with existing discoveries
-        // _discoveredPrinters.clear(); // Removed this line
-        
-        // Add new printers with deduplication based on address
-        final uniquePrinters = <String, DiscoveredPrinter>{};
-        
-        // First add existing printers
-        for (final printer in _discoveredPrinters) {
-          uniquePrinters[printer.address] = printer;
-        }
-        
-        // Then add new discoveries (will overwrite duplicates)
-        for (final printer in printers) {
-          uniquePrinters[printer.address] = printer;
-        }
-        
-        _discoveredPrinters = uniquePrinters.values.toList();
+        // Merge with existing discoveries - allow duplicates for different interfaces
+        _discoveredPrinters.addAll(printers);
         
         _selectedPrinter = _discoveredPrinters.isNotEmpty ? _discoveredPrinters.first : null;
         _isDiscovering = false;
@@ -354,15 +307,8 @@ class _MyHomePageState extends State<MyHomePage> {
       print('[Flutter] Native Bluetooth scan completed. Found ${printers.length} devices');
       
       setState(() {
-        // Clear the list first to avoid duplicates
-        _discoveredPrinters.clear();
-        
-        // Add new printers with deduplication based on address
-        final uniquePrinters = <String, DiscoveredPrinter>{};
-        for (final printer in printers) {
-          uniquePrinters[printer.address] = printer;
-        }
-        _discoveredPrinters = uniquePrinters.values.toList();
+        // Add new printers - allow duplicates for different interfaces
+        _discoveredPrinters.addAll(printers);
         
         _selectedPrinter = _discoveredPrinters.isNotEmpty ? _discoveredPrinters.first : null;
         _isDiscovering = false;
@@ -404,23 +350,8 @@ class _MyHomePageState extends State<MyHomePage> {
       print('[Flutter] Direct BLE test completed. Found ${printers.length} printers');
       
       setState(() {
-        // Don't clear - merge with existing discoveries
-        // _discoveredPrinters.clear(); // Removed this line
-        
-        // Add new printers with deduplication based on address
-        final uniquePrinters = <String, DiscoveredPrinter>{};
-        
-        // First add existing printers
-        for (final printer in _discoveredPrinters) {
-          uniquePrinters[printer.address] = printer;
-        }
-        
-        // Then add new discoveries (will overwrite duplicates)
-        for (final printer in printers) {
-          uniquePrinters[printer.address] = printer;
-        }
-        
-        _discoveredPrinters = uniquePrinters.values.toList();
+        // Merge with existing discoveries - allow duplicates for different interfaces
+        _discoveredPrinters.addAll(printers);
         
         _isDiscovering = false;
       });
@@ -466,20 +397,13 @@ class _MyHomePageState extends State<MyHomePage> {
       print('[Flutter] USB discovery completed. Found ${printers.length} printers');
       
       setState(() {
-        // Clear the list first to avoid duplicates
-        _discoveredPrinters.clear();
-        
-        // Add new printers with deduplication based on address
-        final uniquePrinters = <String, DiscoveredPrinter>{};
-        for (final printer in printers) {
-          uniquePrinters[printer.address] = printer;
-        }
-        _discoveredPrinters = uniquePrinters.values.toList();
+        // Add new USB printers - allow duplicates for different interfaces
+        _discoveredPrinters.addAll(printers);
         
         // Preserve selected printer reference if it still exists
         if (_selectedPrinter != null) {
           final matchingPrinter = _discoveredPrinters
-              .where((p) => p.address == _selectedPrinter!.address)
+              .where((p) => p.address == _selectedPrinter!.address && p.interfaceType == _selectedPrinter!.interfaceType)
               .firstOrNull;
           _selectedPrinter = matchingPrinter;
         }
@@ -812,9 +736,10 @@ class _MyHomePageState extends State<MyHomePage> {
                               final displayAddress = printer.address.length > 15 
                                   ? '${printer.address.substring(0, 15)}...'
                                   : printer.address;
+                              final interfaceType = printer.interfaceType.toUpperCase();
                               return DropdownMenuItem<DiscoveredPrinter>(
                                 value: printer,
-                                child: Text('$displayName ($displayAddress)'),
+                                child: Text('$displayName ($displayAddress) [$interfaceType]'),
                               );
                             }).toList(),
                             onChanged: (DiscoveredPrinter? newValue) {
@@ -829,7 +754,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       ),
                       const SizedBox(height: 8),
                       if (_selectedPrinter != null)
-                        Text('Selected: ${_selectedPrinter!.address} (Port: ${_selectedPrinter!.port})', 
+                        Text('Selected: ${_selectedPrinter!.address} (Port: ${_selectedPrinter!.port}) [${_selectedPrinter!.interfaceType.toUpperCase()}]', 
                              style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic)),
                     ],
                     const SizedBox(height: 16),
