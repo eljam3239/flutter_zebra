@@ -285,6 +285,7 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
         }
 
         executor.execute(() -> {
+            Looper.prepare(); // Required for Bluetooth connections per Zebra SDK docs
             try {
                 Log.d(TAG, "Connecting to " + interfaceType + " printer at " + identifier);
                 
@@ -445,6 +446,8 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
                 mainHandler.post(() -> {
                     result.error("CONNECTION_FAILED", e.getMessage(), null);
                 });
+            } finally {
+                Looper.myLooper().quit(); // Required cleanup per Zebra SDK docs
             }
         });
     }
@@ -548,6 +551,20 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
         Log.d(TAG, "Starting Bluetooth discovery - Adapter state: " + bluetoothAdapter.getState());
         Log.d(TAG, "Bluetooth permissions check passed");
 
+        // Cancel any ongoing discovery before starting new one
+        try {
+            if (bluetoothAdapter.isDiscovering()) {
+                if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED) {
+                    bluetoothAdapter.cancelDiscovery();
+                    Log.d(TAG, "Cancelled existing discovery before starting new one");
+                    // Wait a moment for cancellation to complete
+                    Thread.sleep(500);
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Error cancelling existing discovery: " + e.getMessage());
+        }
+
         new Thread(() -> {
             Looper.prepare();
             try {
@@ -563,6 +580,19 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
                     if (!discoveryCompleted[0]) {
                         Log.w(TAG, "Bluetooth discovery timed out after 30 seconds");
                         discoveryCompleted[0] = true;
+                        
+                        // Clean up any ongoing discovery
+                        try {
+                            if (bluetoothAdapter != null && bluetoothAdapter.isDiscovering()) {
+                                if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED) {
+                                    bluetoothAdapter.cancelDiscovery();
+                                    Log.d(TAG, "Cancelled discovery due to timeout");
+                                }
+                            }
+                        } catch (Exception e) {
+                            Log.w(TAG, "Error cancelling discovery on timeout: " + e.getMessage());
+                        }
+                        
                         mainHandler.post(() -> {
                             result.success(discoveredPrinters); // Return whatever we found so far
                         });
@@ -702,7 +732,22 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
                 });
                 isBleDiscoveryInProgress = false;
             } finally {
-                Looper.myLooper().quit();
+                // Clean up Bluetooth state
+                try {
+                    if (bluetoothAdapter != null && bluetoothAdapter.isDiscovering()) {
+                        if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED) {
+                            bluetoothAdapter.cancelDiscovery();
+                            Log.d(TAG, "Cancelled ongoing Bluetooth discovery to clean up");
+                        }
+                    }
+                } catch (Exception e) {
+                    Log.w(TAG, "Error cleaning up Bluetooth state: " + e.getMessage());
+                }
+                
+                // Always clean up the Looper
+                if (Looper.myLooper() != null) {
+                    Looper.myLooper().quit();
+                }
             }
         }).start();
     }
