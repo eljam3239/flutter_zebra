@@ -212,6 +212,24 @@ class _MyHomePageState extends State<MyHomePage> {
       );
     }
   }
+  Future<void> _discoverAll() async {
+    //if iOS, skip USB discovery
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      await _discoverNetworkPrintersAuto();
+      await _discoverBluetoothPrinters();
+      return;
+    } else {
+      // Android - do all discoveries
+      await _discoverUsbPrinters();
+      await _discoverNetworkPrintersAuto();
+      await _discoverBluetoothPrinters();
+      // if mac address is provided, do direct ble connection test
+      if (_macAddress.isNotEmpty) {
+        await _testDirectBleConnection();
+      }
+      return;
+    }
+  }
 
   Future<void> _discoverNetworkPrintersAuto() async {
     setState(() {
@@ -823,38 +841,46 @@ class _MyHomePageState extends State<MyHomePage> {
                       spacing: 8,
                       runSpacing: 8,
                       children: <Widget>[
+                        // ElevatedButton(
+                        //   onPressed: _isDiscovering ? null : _discoverPrinters,
+                        //   style: ElevatedButton.styleFrom(
+                        //     backgroundColor: Colors.blue,
+                        //     foregroundColor: Colors.white,
+                        //   ),
+                        //   child: _isDiscovering 
+                        //     ? const SizedBox(
+                        //         width: 16,
+                        //         height: 16,
+                        //         child: CircularProgressIndicator(
+                        //           strokeWidth: 2,
+                        //           valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        //         ),
+                        //       )
+                        //     : const Text('Discover Printers (Local)'),
+                        // ),
+                        // ElevatedButton(
+                        //   onPressed: _isDiscovering ? null : _discoverMulticastPrinters,
+                        //   style: ElevatedButton.styleFrom(
+                        //     backgroundColor: Colors.green,
+                        //     foregroundColor: Colors.white,
+                        //   ),
+                        //   child: const Text('Discover (Multicast)'),
+                        // ),
+                        // ElevatedButton(
+                        //   onPressed: _isDiscovering ? null : _discoverSubnetPrinters,
+                        //   style: ElevatedButton.styleFrom(
+                        //     backgroundColor: Colors.orange,
+                        //     foregroundColor: Colors.white,
+                        //   ),
+                        //   child: const Text('Discover (Subnet)'),
+                        // ),
                         ElevatedButton(
-                          onPressed: _isDiscovering ? null : _discoverPrinters,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue,
-                            foregroundColor: Colors.white,
-                          ),
-                          child: _isDiscovering 
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                ),
-                              )
-                            : const Text('Discover Printers (Local)'),
-                        ),
-                        ElevatedButton(
-                          onPressed: _isDiscovering ? null : _discoverMulticastPrinters,
+                          onPressed: _isDiscovering ? null : _discoverAll,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.green,
                             foregroundColor: Colors.white,
                           ),
-                          child: const Text('Discover (Multicast)'),
-                        ),
-                        ElevatedButton(
-                          onPressed: _isDiscovering ? null : _discoverSubnetPrinters,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.orange,
-                            foregroundColor: Colors.white,
-                          ),
-                          child: const Text('Discover (Subnet)'),
+                          child: const Text('Discover All Printers'),
                         ),
                         ElevatedButton(
                           onPressed: _isDiscovering ? null : _discoverNetworkPrintersAuto,
@@ -862,7 +888,7 @@ class _MyHomePageState extends State<MyHomePage> {
                             backgroundColor: Colors.purple,
                             foregroundColor: Colors.white,
                           ),
-                          child: const Text('Auto Discover'),
+                          child: const Text('Auto Discover (LAN)'),
                         ),
                         ElevatedButton(
                           onPressed: _isDiscovering ? null : _discoverBluetoothPrinters,
