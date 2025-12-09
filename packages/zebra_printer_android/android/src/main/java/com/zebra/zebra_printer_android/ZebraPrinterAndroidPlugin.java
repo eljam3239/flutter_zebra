@@ -780,7 +780,7 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
 
         // Get MAC address from call parameters or use ZD421 default
         String macAddress = call.hasArgument("macAddress") ? 
-            (String) call.argument("macAddress") : "B0:B1:13:79:2A:6A";
+            (String) call.argument("macAddress") : "00:07:4D:BC:12:31";
         
         Log.d(TAG, "Testing direct BLE connection to: " + macAddress);
 

@@ -36,6 +36,14 @@ class _MyHomePageState extends State<MyHomePage> {
   DiscoveredPrinter? _selectedPrinter;
   bool _isDiscovering = false;
   int _labelQuantity = 1;
+  String _macAddress = '';
+  final TextEditingController _macAddressController = TextEditingController();
+
+  @override
+  void dispose() {
+    _macAddressController.dispose();
+    super.dispose();
+  }
 
   Future<void> _discoverPrinters() async {
     setState(() {
@@ -286,6 +294,8 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  // Commented out - not used anymore
+  /*
   Future<void> _discoverBluetoothNative() async {
     setState(() {
       _isDiscovering = true;
@@ -327,14 +337,22 @@ class _MyHomePageState extends State<MyHomePage> {
       );
     }
   }
+  */
 
   Future<void> _testDirectBleConnection() async {
+    if (_macAddress.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter MAC address first')),
+      );
+      return;
+    }
+
     setState(() {
       _isDiscovering = true;
     });
 
     try {
-      print('[Flutter] Testing direct BLE connection to ZD421...');
+      print('[Flutter] Testing direct BLE connection to MAC: $_macAddress');
       final printers = await ZebraPrinter.testDirectBleConnection();
       print('[Flutter] Direct BLE test completed. Found ${printers.length} printers');
       
@@ -431,6 +449,8 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  // Commented out - not used anymore
+  /*
   Future<void> _requestBluetoothPermissions() async {
     try {
       print('[Flutter] Requesting Bluetooth permissions...');
@@ -462,6 +482,7 @@ class _MyHomePageState extends State<MyHomePage> {
       );
     }
   }
+  */
 
   Future<void> _connectToPrinter() async {
     if (_selectedPrinter == null) {
@@ -799,22 +820,24 @@ class _MyHomePageState extends State<MyHomePage> {
                           ),
                           child: const Text('Discover (Bluetooth)'),
                         ),
-                        ElevatedButton(
-                          onPressed: _isDiscovering ? null : _discoverBluetoothNative,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.cyan,
-                            foregroundColor: Colors.white,
+                        // Commented out Native BT Scan
+                        // ElevatedButton(
+                        //   onPressed: _isDiscovering ? null : _discoverBluetoothNative,
+                        //   style: ElevatedButton.styleFrom(
+                        //     backgroundColor: Colors.cyan,
+                        //     foregroundColor: Colors.white,
+                        //   ),
+                        //   child: const Text('Native BT Scan'),
+                        // ),
+                        if (defaultTargetPlatform == TargetPlatform.android)
+                          ElevatedButton(
+                            onPressed: (_isDiscovering || _macAddress.isEmpty) ? null : _testDirectBleConnection,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.purple,
+                              foregroundColor: Colors.white,
+                            ),
+                            child: const Text('BTLE (MAC)'),
                           ),
-                          child: const Text('Native BT Scan'),
-                        ),
-                        ElevatedButton(
-                          onPressed: _isDiscovering ? null : _testDirectBleConnection,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.teal,
-                            foregroundColor: Colors.white,
-                          ),
-                          child: const Text('Direct BLE Test'),
-                        ),
                         ElevatedButton(
                           onPressed: _isDiscovering ? null : _discoverUsbPrinters,
                           style: ElevatedButton.styleFrom(
@@ -823,14 +846,15 @@ class _MyHomePageState extends State<MyHomePage> {
                           ),
                           child: const Text('Discover USB'),
                         ),
-                        ElevatedButton(
-                          onPressed: _requestBluetoothPermissions,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.indigo,
-                            foregroundColor: Colors.white,
-                          ),
-                          child: const Text('Grant BT Permissions'),
-                        ),
+                        // Commented out Grant BT Permissions button
+                        // ElevatedButton(
+                        //   onPressed: _requestBluetoothPermissions,
+                        //   style: ElevatedButton.styleFrom(
+                        //     backgroundColor: Colors.indigo,
+                        //     foregroundColor: Colors.white,
+                        //   ),
+                        //   child: const Text('Grant BT Permissions'),
+                        // ),
                         ElevatedButton(
                           onPressed: _selectedPrinter != null && !_isConnected ? _connectToPrinter : null,
                           child: const Text('Connect'),
@@ -883,6 +907,26 @@ class _MyHomePageState extends State<MyHomePage> {
                             ),
                           ],
                         ),
+                        // MAC Address input for Android BTLE connection
+                        if (defaultTargetPlatform == TargetPlatform.android) ...[
+                          const SizedBox(height: 16),
+                          const Text('Printer MAC Address (for BTLE):', style: TextStyle(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _macAddressController,
+                            decoration: const InputDecoration(
+                              hintText: '00:07:4D:XX:XX:XX',
+                              border: OutlineInputBorder(),
+                              labelText: 'MAC Address',
+                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            ),
+                            onChanged: (value) {
+                              setState(() {
+                                _macAddress = value.trim();
+                              });
+                            },
+                          ),
+                        ],
                   ],
                 ),
               ),
