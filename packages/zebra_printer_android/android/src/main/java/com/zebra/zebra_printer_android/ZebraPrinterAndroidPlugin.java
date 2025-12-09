@@ -285,7 +285,10 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
         }
 
         executor.execute(() -> {
-            Looper.prepare(); // Required for Bluetooth connections per Zebra SDK docs
+            // Only prepare Looper if one doesn't already exist
+            if (Looper.myLooper() == null) {
+                Looper.prepare(); // Required for Bluetooth connections per Zebra SDK docs
+            }
             try {
                 Log.d(TAG, "Connecting to " + interfaceType + " printer at " + identifier);
                 
@@ -447,7 +450,10 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
                     result.error("CONNECTION_FAILED", e.getMessage(), null);
                 });
             } finally {
-                Looper.myLooper().quit(); // Required cleanup per Zebra SDK docs
+                // Only quit Looper if it exists and we're on a background thread
+                if (Looper.myLooper() != null && Looper.myLooper() != Looper.getMainLooper()) {
+                    Looper.myLooper().quit();
+                }
             }
         });
     }
@@ -744,8 +750,8 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
                     Log.w(TAG, "Error cleaning up Bluetooth state: " + e.getMessage());
                 }
                 
-                // Always clean up the Looper
-                if (Looper.myLooper() != null) {
+                // Always clean up the Looper if we're on a background thread
+                if (Looper.myLooper() != null && Looper.myLooper() != Looper.getMainLooper()) {
                     Looper.myLooper().quit();
                 }
             }
