@@ -104,7 +104,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Found ${_discoveredPrinters.length} printers')),
+        SnackBar(content: Text('Found ${printers.length} printers')),
       );
     } catch (e) {
       print('[Flutter] Discovery failed: $e');
@@ -155,7 +155,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Multicast found ${_discoveredPrinters.length} printers')),
+        SnackBar(content: Text('Multicast found ${printers.length} printers')),
       );
     } catch (e) {
       print('[Flutter] Multicast discovery failed: $e');
@@ -198,7 +198,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Subnet search found ${_discoveredPrinters.length} printers')),
+        SnackBar(content: Text('Subnet search found ${printers.length} printers')),
       );
     } catch (e) {
       print('[Flutter] Subnet discovery failed: $e');
@@ -240,7 +240,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Auto discovery found ${_discoveredPrinters.length} printers')),
+        SnackBar(content: Text('Auto discovery found ${printers.length} printers')),
       );
     } catch (e) {
       print('[Flutter] Auto discovery failed: $e');
@@ -290,7 +290,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Bluetooth found ${_discoveredPrinters.length} printers')),
+        SnackBar(content: Text('Bluetooth found ${printers.length} printers')),
       );
     } catch (e) {
       print('[Flutter] Bluetooth discovery failed: $e');
@@ -409,7 +409,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Direct BLE test found ${_discoveredPrinters.length} devices')),
+        SnackBar(content: Text('Direct BLE test found ${printers.length} devices')),
       );
     } catch (e) {
       print('[Flutter] Direct BLE connection test failed: $e');
@@ -471,7 +471,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('USB discovery found ${_discoveredPrinters.length} printers')),
+        SnackBar(content: Text('USB discovery found ${printers.length} printers')),
       );
     } catch (e) {
       print('[Flutter] USB discovery failed: $e');
@@ -531,6 +531,21 @@ class _MyHomePageState extends State<MyHomePage> {
     }
 
     try {
+      // Disconnect from current printer if connected to a different one
+      if (_isConnected) {
+        print('[Flutter] Disconnecting from current printer before connecting to new one...');
+        try {
+          await ZebraPrinter.disconnect();
+          setState(() {
+            _isConnected = false;
+            _printerStatus = 'Disconnected';
+          });
+        } catch (e) {
+          print('[Flutter] Error disconnecting from current printer: $e');
+          // Continue with connection attempt anyway
+        }
+      }
+      
       // Create connection settings based on the selected printer's interface type
       ZebraInterfaceType interfaceType;
       if (_selectedPrinter!.interfaceType == 'bluetooth') {
@@ -901,7 +916,7 @@ class _MyHomePageState extends State<MyHomePage> {
                         //   child: const Text('Grant BT Permissions'),
                         // ),
                         ElevatedButton(
-                          onPressed: _selectedPrinter != null && !_isConnected ? _connectToPrinter : null,
+                          onPressed: _selectedPrinter != null ? _connectToPrinter : null,
                           child: const Text('Connect'),
                         ),
                         ElevatedButton(
