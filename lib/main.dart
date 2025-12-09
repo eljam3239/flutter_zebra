@@ -45,6 +45,19 @@ class _MyHomePageState extends State<MyHomePage> {
     super.dispose();
   }
 
+  void _clearDiscoveries() {
+    setState(() {
+      _discoveredPrinters.clear();
+      _selectedPrinter = null;
+      _isConnected = false;
+      _printerStatus = 'Unknown';
+    });
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Cleared all discovered printers')),
+    );
+  }
+
   Future<void> _discoverPrinters() async {
     setState(() {
       _isDiscovering = true;
@@ -57,14 +70,22 @@ class _MyHomePageState extends State<MyHomePage> {
       print('[Flutter] Discovery completed. Found ${printers.length} printers');
       
       setState(() {
-        // Clear the list first to avoid duplicates
-        _discoveredPrinters.clear();
+        // Don't clear - merge with existing discoveries
+        // _discoveredPrinters.clear(); // Removed this line
         
         // Add new printers with deduplication based on address
         final uniquePrinters = <String, DiscoveredPrinter>{};
+        
+        // First add existing printers
+        for (final printer in _discoveredPrinters) {
+          uniquePrinters[printer.address] = printer;
+        }
+        
+        // Then add new discoveries (will overwrite duplicates)
         for (final printer in printers) {
           uniquePrinters[printer.address] = printer;
         }
+        
         _discoveredPrinters = uniquePrinters.values.toList();
         
         // Preserve selected printer reference if it still exists, otherwise select first
@@ -245,14 +266,22 @@ class _MyHomePageState extends State<MyHomePage> {
       print('[Flutter] Bluetooth discovery completed. Found ${printers.length} printers');
       
       setState(() {
-        // Clear the list first to avoid duplicates
-        _discoveredPrinters.clear();
+        // Don't clear - merge with existing discoveries
+        // _discoveredPrinters.clear(); // Removed this line
         
         // Add new printers with deduplication based on address
         final uniquePrinters = <String, DiscoveredPrinter>{};
+        
+        // First add existing printers
+        for (final printer in _discoveredPrinters) {
+          uniquePrinters[printer.address] = printer;
+        }
+        
+        // Then add new discoveries (will overwrite duplicates)
         for (final printer in printers) {
           uniquePrinters[printer.address] = printer;
         }
+        
         _discoveredPrinters = uniquePrinters.values.toList();
         
         _selectedPrinter = _discoveredPrinters.isNotEmpty ? _discoveredPrinters.first : null;
@@ -357,14 +386,22 @@ class _MyHomePageState extends State<MyHomePage> {
       print('[Flutter] Direct BLE test completed. Found ${printers.length} printers');
       
       setState(() {
-        // Clear the list first to avoid duplicates
-        _discoveredPrinters.clear();
+        // Don't clear - merge with existing discoveries
+        // _discoveredPrinters.clear(); // Removed this line
         
         // Add new printers with deduplication based on address
         final uniquePrinters = <String, DiscoveredPrinter>{};
+        
+        // First add existing printers
+        for (final printer in _discoveredPrinters) {
+          uniquePrinters[printer.address] = printer;
+        }
+        
+        // Then add new discoveries (will overwrite duplicates)
         for (final printer in printers) {
           uniquePrinters[printer.address] = printer;
         }
+        
         _discoveredPrinters = uniquePrinters.values.toList();
         
         _isDiscovering = false;
@@ -819,6 +856,14 @@ class _MyHomePageState extends State<MyHomePage> {
                             foregroundColor: Colors.white,
                           ),
                           child: const Text('Discover (Bluetooth)'),
+                        ),
+                        ElevatedButton(
+                          onPressed: _discoveredPrinters.isEmpty ? null : _clearDiscoveries,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('Clear Discoveries'),
                         ),
                         // Commented out Native BT Scan
                         // ElevatedButton(

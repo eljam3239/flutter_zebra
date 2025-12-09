@@ -44,6 +44,16 @@ class DiscoveredPrinter {
   String toString() {
     return 'DiscoveredPrinter(address: $address, port: $port, name: $friendlyName, type: $interfaceType)';
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    if (other is! DiscoveredPrinter) return false;
+    return other.address == address && other.interfaceType == interfaceType;
+  }
+
+  @override
+  int get hashCode => address.hashCode ^ interfaceType.hashCode;
 }
 
 /// Data models for zebra printer platform interface
