@@ -36,7 +36,10 @@ import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
 import io.flutter.plugin.common.MethodChannel.Result;
 
 import com.zebra.sdk.comm.Connection;
+import com.zebra.sdk.comm.ConnectionException;
 import com.zebra.sdk.comm.TcpConnection;
+import com.zebra.sdk.comm.BluetoothConnection;
+import com.zebra.sdk.comm.BluetoothConnectionInsecure;
 import com.zebra.sdk.btleComm.BluetoothLeConnection;
 import com.zebra.sdk.btleComm.BluetoothLeDiscoverer;
 import com.zebra.sdk.btleComm.DiscoveredPrinterBluetoothLe;
@@ -47,6 +50,7 @@ import com.zebra.sdk.printer.discovery.DiscoveryException;
 import com.zebra.sdk.printer.discovery.NetworkDiscoverer;
 import com.zebra.sdk.printer.discovery.UsbDiscoverer;
 import com.zebra.sdk.printer.discovery.DiscoveredPrinterUsb;
+import com.zebra.sdk.printer.discovery.BluetoothDiscoverer;
 import com.zebra.sdk.printer.ZebraPrinter;
 import com.zebra.sdk.printer.ZebraPrinterFactory;
 import com.zebra.sdk.printer.ZebraPrinterLanguageUnknownException;
@@ -55,6 +59,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.CompletableFuture;
@@ -308,12 +313,27 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
                     
                     activeConnection = new TcpConnection(ipAddress, port);
                 } else if ("bluetooth".equalsIgnoreCase(interfaceType)) {
-                    // Create Bluetooth LE connection using MAC address
-                    activeConnection = new BluetoothLeConnection(identifier);
+                    // Get connection type from printer data (secure vs insecure)
+                    String connectionType = (String) settings.get("connectionType");
+                    boolean isClassicBluetooth = isClassicBluetoothDevice(identifier);
                     
-                    // Set context for BLE connection (required by Zebra SDK)
-                    if (activeConnection instanceof BluetoothLeConnection) {
-                        ((BluetoothLeConnection) activeConnection).setContext(activity);
+                    if (isClassicBluetooth) {
+                        if ("secure".equals(connectionType)) {
+                            Log.d(TAG, "Creating Secure Classic Bluetooth connection to: " + identifier);
+                            activeConnection = new BluetoothConnection(identifier);
+                        } else {
+                            Log.d(TAG, "Creating Insecure Classic Bluetooth connection to: " + identifier);
+                            activeConnection = new BluetoothConnectionInsecure(identifier);
+                        }
+                    } else {
+                        Log.d(TAG, "Creating BLE connection to: " + identifier);
+                        // Create Bluetooth LE connection using MAC address
+                        activeConnection = new BluetoothLeConnection(identifier);
+                        
+                        // Set context for BLE connection (required by Zebra SDK)
+                        if (activeConnection instanceof BluetoothLeConnection) {
+                            ((BluetoothLeConnection) activeConnection).setContext(activity);
+                        }
                     }
                 } else if ("usb".equalsIgnoreCase(interfaceType)) {
                     // USB connections require the DiscoveredPrinterUsb object
@@ -516,117 +536,361 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
             return;
         }
 
-        executor.execute(() -> {
-            boolean looperPrepared = false;
+        // Check if Bluetooth is enabled
+        BluetoothManager bluetoothManager = (BluetoothManager) context.getSystemService(Context.BLUETOOTH_SERVICE);
+        BluetoothAdapter bluetoothAdapter = bluetoothManager.getAdapter();
+        
+        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled()) {
+            result.error("BLUETOOTH_DISABLED", "Bluetooth is not enabled. Please enable Bluetooth and try again.", null);
+            return;
+        }
+
+        Log.d(TAG, "Starting Bluetooth discovery - Adapter state: " + bluetoothAdapter.getState());
+        Log.d(TAG, "Bluetooth permissions check passed");
+
+        new Thread(() -> {
+            Looper.prepare();
             try {
                 isBleDiscoveryInProgress = true;
-                // Only prepare looper if one doesn't already exist
-                if (Looper.myLooper() == null) {
-                    Looper.prepare();
-                    looperPrepared = true;
-                }
+                Log.d(TAG, "Starting Bluetooth discovery using BluetoothDiscoverer...");
                 
-                Log.d(TAG, "Starting Bluetooth LE discovery...");
+                List<Map<String, Object>> discoveredPrinters = new ArrayList<>();
+                final boolean[] discoveryCompleted = {false};
                 
-                // Increase SDK discovery timeout to 30 seconds to give slow-advertising devices time to appear
-                try {
-                    BluetoothLeDiscoverer.setDiscoveryTimeoutInterval(30000);
-                } catch (Exception e) {
-                    Log.w(TAG, "Failed to set BTLE discovery timeout: " + e.getMessage());
-                }
-
-                final List<DiscoveredPrinter> discoveredPrinters = new ArrayList<>();
-
-                DiscoveryHandler discoveryHandler = new DiscoveryHandler() {
-                    @Override
-                    public void foundPrinter(DiscoveredPrinter discoveredPrinter) {
-                        Map<String, String> discoveryData = discoveredPrinter.getDiscoveryDataMap();
-                        Log.d(TAG, "Found Bluetooth printer!");
-                        Log.d(TAG, "  Printer type: " + discoveredPrinter.getClass().getSimpleName());
-                        
-                        // Check if this is specifically a BLE printer
-                        if (discoveredPrinter instanceof DiscoveredPrinterBluetoothLe) {
-                            DiscoveredPrinterBluetoothLe blePrinter = (DiscoveredPrinterBluetoothLe) discoveredPrinter;
-                            Log.d(TAG, "  BLE Address: " + blePrinter.address);
-                            Log.d(TAG, "  BLE Friendly Name: " + blePrinter.friendlyName);
-                        }
-                        
-                        Log.d(TAG, "  FRIENDLY_NAME: " + discoveryData.get("FRIENDLY_NAME"));
-                        Log.d(TAG, "  ADDRESS: " + discoveryData.get("ADDRESS"));
-                        Log.d(TAG, "  MODEL: " + discoveryData.get("MODEL"));
-                        Log.d(TAG, "  SERIAL_NUMBER: " + discoveryData.get("SERIAL_NUMBER"));
-                        Log.d(TAG, "  All discovery data: " + discoveryData.toString());
-
-                        synchronized (discoveredPrinters) {
-                            discoveredPrinters.add(discoveredPrinter);
-                        }
+                // Create a timeout handler
+                Handler timeoutHandler = new Handler(Looper.getMainLooper());
+                Runnable timeoutRunnable = () -> {
+                    if (!discoveryCompleted[0]) {
+                        Log.w(TAG, "Bluetooth discovery timed out after 30 seconds");
+                        discoveryCompleted[0] = true;
+                        mainHandler.post(() -> {
+                            result.success(discoveredPrinters); // Return whatever we found so far
+                        });
+                        isBleDiscoveryInProgress = false;
                     }
-
-                    @Override
-                    public void discoveryFinished() {
-                        Log.d(TAG, "Bluetooth discovery finished callback received");
-
-                        List<Map<String, Object>> printers = new ArrayList<>();
-                        synchronized (discoveredPrinters) {
-                            for (DiscoveredPrinter printer : discoveredPrinters) {
-                                Map<String, Object> printerMap = new HashMap<>();
+                };
+                
+                // Set 30 second timeout
+                timeoutHandler.postDelayed(timeoutRunnable, 30000);
+                
+                Log.d(TAG, "Calling BluetoothDiscoverer.findPrinters() with context: " + context.getClass().getSimpleName());
+                
+                // First try to check paired devices (like iOS checks connected accessories)
+                try {
+                    if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
+                        Set<BluetoothDevice> pairedDevices = bluetoothAdapter.getBondedDevices();
+                        Log.d(TAG, "Found " + pairedDevices.size() + " paired Bluetooth devices");
+                        
+                        for (BluetoothDevice device : pairedDevices) {
+                            String deviceName = device.getName();
+                            String deviceAddress = device.getAddress();
+                            
+                            Log.d(TAG, "Checking paired device: " + deviceName + " (" + deviceAddress + ")");
+                            
+                            // Check if this looks like a Zebra printer
+                            boolean isZebraPrinter = false;
+                            
+                            if (deviceName != null) {
+                                String nameLower = deviceName.toLowerCase();
                                 
-                                // Handle BLE printers specifically
-                                if (printer instanceof DiscoveredPrinterBluetoothLe) {
-                                    DiscoveredPrinterBluetoothLe blePrinter = (DiscoveredPrinterBluetoothLe) printer;
-                                    printerMap.put("friendlyName", blePrinter.friendlyName);
-                                    printerMap.put("address", blePrinter.address);
-                                    printerMap.put("interfaceType", "bluetooth_le");
-                                } else {
-                                    // Fallback to discovery data
-                                    printerMap.put("friendlyName", printer.getDiscoveryDataMap().get("FRIENDLY_NAME"));
-                                    String btAddress = printer.getDiscoveryDataMap().get("ADDRESS");
-                                    printerMap.put("address", btAddress != null ? btAddress : "Unknown");
-                                    printerMap.put("interfaceType", "bluetooth");
+                                // Check for explicit Zebra branding
+                                if (nameLower.contains("zebra") || nameLower.contains("zq") || 
+                                    nameLower.contains("zt") || nameLower.contains("zd")) {
+                                    isZebraPrinter = true;
                                 }
+                                // Check for Zebra printer serial number patterns
+                                // Zebra printers often use serial numbers like: 50N220800901, XXABC123456, etc.
+                                else if (deviceName.matches("^[0-9]{2}[A-Z][0-9]{9}$") ||  // 50N220800901 pattern
+                                         deviceName.matches("^[A-Z0-9]{10,15}$") ||        // General alphanumeric serial
+                                         deviceName.matches("^[0-9A-Z]{8,12}$")) {        // Shorter serial patterns
+                                    Log.d(TAG, "Device name matches Zebra serial number pattern: " + deviceName);
+                                    isZebraPrinter = true;
+                                }
+                            }
+                            
+                            if (isZebraPrinter) {
+                                Log.d(TAG, "Found paired Zebra printer: " + deviceName);
                                 
-                                printerMap.put("port", "0");
-                                printerMap.put("serialNumber", printer.getDiscoveryDataMap().get("SERIAL_NUMBER"));
-                                printers.add(printerMap);
+                                Map<String, Object> printerMap = new HashMap<>();
+                                printerMap.put("friendlyName", deviceName);
+                                printerMap.put("address", deviceAddress);
+                                printerMap.put("interfaceType", "bluetooth");
+                                printerMap.put("port", 0);  // Integer, not string
+                                printerMap.put("serialNumber", deviceAddress); // Use MAC as serial for paired devices
+                                printerMap.put("manufacturer", "Zebra");
+                                printerMap.put("connectionType", "secure");
+                                
+                                discoveredPrinters.add(printerMap);
                             }
                         }
-
-                        mainHandler.post(() -> {
-                            Log.d(TAG, "Bluetooth discovery completed. Found " + printers.size() + " printers");
-                            result.success(printers);
-                        });
                     }
-
+                } catch (Exception e) {
+                    Log.w(TAG, "Error checking paired devices: " + e.getMessage());
+                }
+                
+                // If we found paired printers, return them immediately
+                if (!discoveredPrinters.isEmpty()) {
+                    Log.d(TAG, "Found " + discoveredPrinters.size() + " paired Zebra printers, returning immediately");
+                    discoveryCompleted[0] = true;
+                    timeoutHandler.removeCallbacks(timeoutRunnable);
+                    mainHandler.post(() -> {
+                        result.success(discoveredPrinters);
+                    });
+                    isBleDiscoveryInProgress = false;
+                    return;
+                }
+                
+                Log.d(TAG, "No paired Zebra printers found, starting active discovery...");
+                
+                // Use Zebra SDK BluetoothDiscoverer for active discovery - following official demo pattern
+                BluetoothDiscoverer.findPrinters(context, new DiscoveryHandler() {
+                    @Override
+                    public void foundPrinter(DiscoveredPrinter discoveredPrinter) {
+                        if (discoveryCompleted[0]) return;
+                        
+                        Log.d(TAG, "Found Bluetooth printer: " + discoveredPrinter.getDiscoveryDataMap());
+                        
+                        Map<String, Object> printerMap = new HashMap<>();
+                        printerMap.put("friendlyName", discoveredPrinter.getDiscoveryDataMap().get("FRIENDLY_NAME"));
+                        printerMap.put("address", getPrinterAddress(discoveredPrinter));
+                        printerMap.put("interfaceType", "bluetooth");
+                        printerMap.put("port", 0);  // Integer, not string
+                        printerMap.put("serialNumber", discoveredPrinter.getDiscoveryDataMap().get("SERIAL_NUMBER"));
+                        printerMap.put("manufacturer", "Zebra");
+                        printerMap.put("connectionType", "secure"); // Mark as secure Bluetooth
+                        
+                        discoveredPrinters.add(printerMap);
+                    }
+                    
+                    @Override
+                    public void discoveryFinished() {
+                        if (discoveryCompleted[0]) return;
+                        
+                        Log.d(TAG, "Bluetooth discovery finished. Found " + discoveredPrinters.size() + " printers");
+                        discoveryCompleted[0] = true;
+                        timeoutHandler.removeCallbacks(timeoutRunnable);
+                        mainHandler.post(() -> {
+                            result.success(discoveredPrinters);
+                        });
+                        isBleDiscoveryInProgress = false;
+                    }
+                    
                     @Override
                     public void discoveryError(String message) {
-                        Log.e(TAG, "Bluetooth discovery error callback: " + message);
+                        if (discoveryCompleted[0]) return;
+                        
+                        Log.e(TAG, "Bluetooth discovery error: " + message);
+                        discoveryCompleted[0] = true;
+                        timeoutHandler.removeCallbacks(timeoutRunnable);
                         mainHandler.post(() -> {
                             result.error("DISCOVERY_FAILED", message, null);
                         });
+                        isBleDiscoveryInProgress = false;
                     }
-                };
-
-                Log.d(TAG, "Starting BluetoothLeDiscoverer.findPrinters with context only (demo pattern)...");
-                // Use 2-parameter method like in the demo - context and handler only
-                BluetoothLeDiscoverer.findPrinters(activity, discoveryHandler);
+                });
                 
+            } catch (ConnectionException e) {
+                Log.e(TAG, "Bluetooth discovery ConnectionException: " + e.getMessage());
+                mainHandler.post(() -> {
+                    result.error("CONNECTION_EXCEPTION", e.getMessage(), null);
+                });
+                isBleDiscoveryInProgress = false;
             } catch (Exception e) {
                 Log.e(TAG, "Bluetooth discovery failed", e);
                 mainHandler.post(() -> {
                     result.error("DISCOVERY_FAILED", e.getMessage(), null);
                 });
-            } finally {
                 isBleDiscoveryInProgress = false;
-                // Only quit looper if we prepared it
-                if (looperPrepared) {
-                    try {
-                        Looper.myLooper().quit(); // Clean up looper
-                    } catch (Exception e) {
-                        Log.w(TAG, "Error quitting looper", e);
-                    }
+            } finally {
+                Looper.myLooper().quit();
+            }
+        }).start();
+    }
+
+    private List<Map<String, Object>> discoverClassicBluetoothPrinters() {
+        List<Map<String, Object>> classicPrinters = new ArrayList<>();
+        
+        try {
+            BluetoothManager bluetoothManager = (BluetoothManager) context.getSystemService(Context.BLUETOOTH_SERVICE);
+            BluetoothAdapter bluetoothAdapter = bluetoothManager.getAdapter();
+            
+            if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled()) {
+                Log.d(TAG, "Bluetooth adapter not available or not enabled");
+                return classicPrinters;
+            }
+            
+            // Check permissions for getBondedDevices
+            if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                Log.w(TAG, "Missing BLUETOOTH_CONNECT permission for Classic Bluetooth discovery");
+                return classicPrinters;
+            }
+            
+            // Get paired (bonded) devices
+            Set<BluetoothDevice> pairedDevices = bluetoothAdapter.getBondedDevices();
+            Log.d(TAG, "Found " + pairedDevices.size() + " paired Bluetooth devices");
+            
+            for (BluetoothDevice device : pairedDevices) {
+                String deviceName = device.getName();
+                String deviceAddress = device.getAddress();
+                
+                Log.d(TAG, "Checking paired device: " + deviceName + " (" + deviceAddress + ")");
+                
+                // Filter for Zebra printers (you can adjust this logic)
+                if (deviceName != null && (deviceName.toLowerCase().contains("zebra") || 
+                    deviceName.toLowerCase().contains("zd410") || 
+                    deviceName.toLowerCase().contains("zd421"))) {
+                    
+                    Log.d(TAG, "Found Zebra Classic Bluetooth printer: " + deviceName);
+                    
+                    Map<String, Object> printerMap = new HashMap<>();
+                    printerMap.put("friendlyName", deviceName);
+                    printerMap.put("address", deviceAddress);
+                    printerMap.put("interfaceType", "bluetooth");
+                    printerMap.put("port", "0");
+                    printerMap.put("serialNumber", "Unknown");
+                    printerMap.put("manufacturer", "Zebra");
+                    printerMap.put("connectionType", "secure"); // Mark as secure Bluetooth
+                    
+                    classicPrinters.add(printerMap);
                 }
             }
+            
+            Log.d(TAG, "Classic Bluetooth discovery found " + classicPrinters.size() + " Zebra printers");
+            
+        } catch (Exception e) {
+            Log.e(TAG, "Error during Classic Bluetooth discovery", e);
+        }
+        
+        return classicPrinters;
+    }
+
+    private boolean isClassicBluetoothDevice(String macAddress) {
+        try {
+            BluetoothManager bluetoothManager = (BluetoothManager) context.getSystemService(Context.BLUETOOTH_SERVICE);
+            BluetoothAdapter bluetoothAdapter = bluetoothManager.getAdapter();
+            
+            if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled()) {
+                return false;
+            }
+            
+            // Check permissions for getBondedDevices
+            if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                return false;
+            }
+            
+            // Check if the MAC address is in paired devices
+            Set<BluetoothDevice> pairedDevices = bluetoothAdapter.getBondedDevices();
+            for (BluetoothDevice device : pairedDevices) {
+                if (macAddress.equalsIgnoreCase(device.getAddress())) {
+                    return true;
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error checking if device is Classic Bluetooth", e);
+        }
+        
+        return false; // Default to BLE if we can't determine
+    }
+
+    private void discoverBluetoothPrintersInsecure(MethodCall call, Result result) {
+        if (activity == null) {
+            result.error("NO_ACTIVITY", "Activity context is required for Bluetooth discovery", null);
+            return;
+        }
+
+        // Check if discovery is already in progress
+        if (isBleDiscoveryInProgress) {
+            result.error("DISCOVERY_IN_PROGRESS", "Bluetooth discovery is already in progress. Please wait for it to complete.", null);
+            return;
+        }
+
+        // Check for required permissions
+        if (!hasBluetoothPermissions()) {
+            result.error("MISSING_PERMISSIONS", 
+                "Bluetooth permissions are required. Please grant BLUETOOTH_SCAN and location permissions.", 
+                null);
+            return;
+        }
+
+        executor.execute(() -> {
+            try {
+                isBleDiscoveryInProgress = true;
+                Log.d(TAG, "Starting Insecure Classic Bluetooth discovery...");
+                
+                // Discover Classic Bluetooth paired devices using insecure connection
+                List<Map<String, Object>> classicPrinters = discoverClassicBluetoothPrintersInsecure();
+                
+                mainHandler.post(() -> {
+                    Log.d(TAG, "Insecure Classic Bluetooth discovery completed. Found " + classicPrinters.size() + " printers");
+                    result.success(classicPrinters);
+                });
+                
+            } catch (Exception e) {
+                Log.e(TAG, "Insecure Classic Bluetooth discovery failed", e);
+                mainHandler.post(() -> {
+                    result.error("DISCOVERY_FAILED", e.getMessage(), null);
+                });
+            } finally {
+                isBleDiscoveryInProgress = false;
+            }
         });
+    }
+
+    private List<Map<String, Object>> discoverClassicBluetoothPrintersInsecure() {
+        List<Map<String, Object>> classicPrinters = new ArrayList<>();
+        
+        try {
+            BluetoothManager bluetoothManager = (BluetoothManager) context.getSystemService(Context.BLUETOOTH_SERVICE);
+            BluetoothAdapter bluetoothAdapter = bluetoothManager.getAdapter();
+            
+            if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled()) {
+                Log.d(TAG, "Bluetooth adapter not available or not enabled");
+                return classicPrinters;
+            }
+            
+            // Check permissions for getBondedDevices
+            if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                Log.w(TAG, "Missing BLUETOOTH_CONNECT permission for Classic Bluetooth discovery");
+                return classicPrinters;
+            }
+            
+            // Get paired (bonded) devices
+            Set<BluetoothDevice> pairedDevices = bluetoothAdapter.getBondedDevices();
+            Log.d(TAG, "Found " + pairedDevices.size() + " paired Bluetooth devices");
+            
+            for (BluetoothDevice device : pairedDevices) {
+                String deviceName = device.getName();
+                String deviceAddress = device.getAddress();
+                
+                Log.d(TAG, "Checking paired device: " + deviceName + " (" + deviceAddress + ")");
+                
+                // Filter for Zebra printers (you can adjust this logic)
+                if (deviceName != null && (deviceName.toLowerCase().contains("zebra") || 
+                    deviceName.toLowerCase().contains("zd410") || 
+                    deviceName.toLowerCase().contains("zd421"))) {
+                    
+                    Log.d(TAG, "Found Zebra Insecure Classic Bluetooth printer: " + deviceName);
+                    
+                    Map<String, Object> printerMap = new HashMap<>();
+                    printerMap.put("friendlyName", deviceName);
+                    printerMap.put("address", deviceAddress);
+                    printerMap.put("interfaceType", "bluetooth");
+                    printerMap.put("port", "0");
+                    printerMap.put("serialNumber", "Unknown");
+                    printerMap.put("manufacturer", "Zebra");
+                    printerMap.put("connectionType", "insecure"); // Mark as insecure Bluetooth
+                    
+                    classicPrinters.add(printerMap);
+                }
+            }
+            
+            Log.d(TAG, "Insecure Classic Bluetooth discovery found " + classicPrinters.size() + " Zebra printers");
+            
+        } catch (Exception e) {
+            Log.e(TAG, "Error during Insecure Classic Bluetooth discovery", e);
+        }
+        
+        return classicPrinters;
     }
 
     private void discoverBluetoothNative(MethodCall call, Result result) {
@@ -778,9 +1042,15 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
             return;
         }
 
-        // Get MAC address from call parameters or use ZD421 default
-        String macAddress = call.hasArgument("macAddress") ? 
-            (String) call.argument("macAddress") : "00:07:4D:BC:12:31";
+        // Get MAC address from call arguments 
+        @SuppressWarnings("unchecked")
+        Map<String, Object> args = (Map<String, Object>) call.arguments;
+        String macAddress = args != null ? (String) args.get("macAddress") : null;
+        
+        if (macAddress == null || macAddress.trim().isEmpty()) {
+            result.error("MISSING_MAC_ADDRESS", "MAC address is required for direct BLE connection", null);
+            return;
+        }
         
         Log.d(TAG, "Testing direct BLE connection to: " + macAddress);
 

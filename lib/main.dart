@@ -353,7 +353,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
     try {
       print('[Flutter] Testing direct BLE connection to MAC: $_macAddress');
-      final printers = await ZebraPrinter.testDirectBleConnection();
+      final printers = await ZebraPrinter.testDirectBleConnection(macAddress: _macAddress);
       print('[Flutter] Direct BLE test completed. Found ${printers.length} printers');
       
       setState(() {
