@@ -110,4 +110,9 @@ class ZebraPrinter {
   static Future<bool> isConnected() {
     return _platform.isConnected();
   }
+
+  /// Gets printer dimensions (width, height, DPI, etc.)
+  static Future<Map<String, int>> getPrinterDimensions() {
+    return _platform.getPrinterDimensions();
+  }
 }

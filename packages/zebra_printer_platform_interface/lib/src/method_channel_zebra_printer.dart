@@ -150,4 +150,21 @@ class MethodChannelZebraPrinter extends ZebraPrinterPlatform {
     final result = await methodChannel.invokeMethod<bool>('isConnected');
     return result ?? false;
   }
+
+  @override
+  Future<Map<String, int>> getPrinterDimensions() async {
+    final result = await methodChannel.invokeMethod<Map<Object?, Object?>>('getPrinterDimensions');
+    if (result == null) return {};
+    
+    // Safely cast the result to Map<String, int>
+    final Map<String, int> dimensions = {};
+    for (final entry in result.entries) {
+      final key = entry.key?.toString();
+      final value = entry.value;
+      if (key != null && value is num) {
+        dimensions[key] = value.toInt();
+      }
+    }
+    return dimensions;
+  }
 }

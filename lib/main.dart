@@ -692,6 +692,55 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  Future<void> _getPrinterDimensions() async {
+    if (!_isConnected) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please connect to a printer first')),
+      );
+      return;
+    }
+
+    try {
+      print('[Flutter] Getting printer dimensions...');
+      final dimensions = await ZebraPrinter.getPrinterDimensions();
+      print('[Flutter] Printer dimensions: $dimensions');
+
+      // Show dimensions in a dialog
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Printer Dimensions'),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: dimensions.entries.map((entry) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2.0),
+                  child: Text('${entry.key}: ${entry.value}', 
+                    style: const TextStyle(fontFamily: 'monospace')),
+                );
+              }).toList(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      print('[Flutter] Failed to get printer dimensions: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to get dimensions: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -881,6 +930,10 @@ class _MyHomePageState extends State<MyHomePage> {
                         ElevatedButton(
                           onPressed: _isConnected ? _printLabel : null,
                           child: const Text('Print Label'),
+                        ),
+                        ElevatedButton(
+                          onPressed: _isConnected ? _getPrinterDimensions : null,
+                          child: const Text('Get Dimensions'),
                         ),
                         
                       ],

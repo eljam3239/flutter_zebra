@@ -7,6 +7,8 @@
 #import "ZebraPrinterFactory.h"
 #import "TcpPrinterConnection.h"
 #import "MfiBtPrinterConnection.h"
+#import "SGD.h"
+#import "PrinterStatus.h"
 #import <ExternalAccessory/ExternalAccessory.h>
 #import <ifaddrs.h>
 #import <arpa/inet.h>
@@ -55,6 +57,8 @@
     [self getStatusWithResult:result];
   } else if ([@"isConnected" isEqualToString:call.method]) {
     [self isConnectedWithResult:result];
+  } else if ([@"getPrinterDimensions" isEqualToString:call.method]) {
+    [self getPrinterDimensionsWithResult:result];
   } else {
     result(FlutterMethodNotImplemented);
   }
@@ -684,6 +688,88 @@
   }
   
   return [subnets copy];
+}
+
+- (void)getPrinterDimensionsWithResult:(FlutterResult)result {
+  NSLog(@"[ZebraPrinter] Getting printer dimensions...");
+  
+  if (!self.activeConnection || ![self.activeConnection isConnected]) {
+    result([FlutterError errorWithCode:@"NOT_CONNECTED"
+                               message:@"No active printer connection"
+                               details:nil]);
+    return;
+  }
+  
+  dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+    NSError *error = nil;
+    NSMutableDictionary *dimensions = [NSMutableDictionary dictionary];
+    
+    // Get the ZebraPrinter instance for status queries
+    id<ZebraPrinter, NSObject> zebraPrinter = [ZebraPrinterFactory getInstance:self.activeConnection error:&error];
+    
+    if (zebraPrinter != nil) {
+      // Get printer status which includes label length in dots
+      PrinterStatus *status = [zebraPrinter getCurrentStatus:&error];
+      if (status != nil) {
+        [dimensions setObject:@(status.labelLengthInDots) forKey:@"labelLengthInDots"];
+        NSLog(@"[ZebraPrinter] Label length in dots: %ld", (long)status.labelLengthInDots);
+      } else {
+        NSLog(@"[ZebraPrinter] Failed to get printer status: %@", error.localizedDescription);
+      }
+    }
+    
+    // Get print width using SGD commands
+    NSString *printWidth = [SGD GET:@"ezpl.print_width" withPrinterConnection:self.activeConnection error:&error];
+    if (printWidth != nil && error == nil) {
+      [dimensions setObject:@([printWidth integerValue]) forKey:@"printWidthInDots"];
+      NSLog(@"[ZebraPrinter] Print width in dots: %@", printWidth);
+    } else {
+      NSLog(@"[ZebraPrinter] Failed to get print width: %@", error.localizedDescription);
+    }
+    
+    // Get printer DPI
+    NSString *dpi = [SGD GET:@"device.resolution" withPrinterConnection:self.activeConnection error:&error];
+    if (dpi != nil && error == nil) {
+      [dimensions setObject:@([dpi integerValue]) forKey:@"dpi"];
+      NSLog(@"[ZebraPrinter] Printer DPI: %@", dpi);
+    } else {
+      NSLog(@"[ZebraPrinter] Failed to get DPI: %@", error.localizedDescription);
+    }
+    
+    // Get maximum print width (full printer width)
+    NSString *maxPrintWidth = [SGD GET:@"ezpl.max_print_width" withPrinterConnection:self.activeConnection error:&error];
+    if (maxPrintWidth != nil && error == nil) {
+      [dimensions setObject:@([maxPrintWidth integerValue]) forKey:@"maxPrintWidthInDots"];
+      NSLog(@"[ZebraPrinter] Max print width in dots: %@", maxPrintWidth);
+    } else {
+      NSLog(@"[ZebraPrinter] Failed to get max print width, trying alternative...");
+      
+      // Alternative: try getting head width
+      NSString *headWidth = [SGD GET:@"device.host_print_width" withPrinterConnection:self.activeConnection error:&error];
+      if (headWidth != nil && error == nil) {
+        [dimensions setObject:@([headWidth integerValue]) forKey:@"maxPrintWidthInDots"];
+        NSLog(@"[ZebraPrinter] Head width in dots: %@", headWidth);
+      }
+    }
+    
+    // Get media dimensions if available
+    NSString *mediaWidth = [SGD GET:@"ezpl.media_width" withPrinterConnection:self.activeConnection error:&error];
+    if (mediaWidth != nil && error == nil) {
+      [dimensions setObject:@([mediaWidth integerValue]) forKey:@"mediaWidthInDots"];
+      NSLog(@"[ZebraPrinter] Media width in dots: %@", mediaWidth);
+    }
+    
+    dispatch_async(dispatch_get_main_queue(), ^{
+      if ([dimensions count] > 0) {
+        NSLog(@"[ZebraPrinter] Returning printer dimensions: %@", dimensions);
+        result(dimensions);
+      } else {
+        result([FlutterError errorWithCode:@"QUERY_FAILED"
+                                   message:@"Failed to query printer dimensions"
+                                   details:nil]);
+      }
+    });
+  });
 }
 
 @end

@@ -121,4 +121,9 @@ abstract class ZebraPrinterPlatform extends PlatformInterface {
   Future<bool> isConnected() {
     throw UnimplementedError('isConnected() has not been implemented.');
   }
+
+  /// Gets printer dimensions (width, height, DPI, etc.)
+  Future<Map<String, int>> getPrinterDimensions() {
+    throw UnimplementedError('getPrinterDimensions() has not been implemented.');
+  }
 }
