@@ -54,6 +54,8 @@ import com.zebra.sdk.printer.discovery.BluetoothDiscoverer;
 import com.zebra.sdk.printer.ZebraPrinter;
 import com.zebra.sdk.printer.ZebraPrinterFactory;
 import com.zebra.sdk.printer.ZebraPrinterLanguageUnknownException;
+import com.zebra.sdk.printer.PrinterStatus;
+import com.zebra.sdk.settings.SettingsException;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -63,6 +65,8 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.CompletableFuture;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 
 /** ZebraPrinterAndroidPlugin */
 public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandler, ActivityAware {
@@ -148,6 +152,18 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
                 break;
             case "getActiveConnection":
                 getActiveConnection(result);
+                break;
+            case "getSgdParameter":
+                getSgdParameter(call, result);
+                break;
+            case "setSgdParameter":
+                setSgdParameter(call, result);
+                break;
+            case "getPrinterDimensions":
+                getPrinterDimensions(result);
+                break;
+            case "setLabelLength":
+                setLabelLength(call, result);
                 break;
             default:
                 result.notImplemented();
@@ -1805,5 +1821,260 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
     public void onDetachedFromActivity() {
         cleanupUsbPermissionReceiver();
         activity = null;
+    }
+
+    private void getSgdParameter(MethodCall call, Result result) {
+        if (activeConnection == null || !activeConnection.isConnected()) {
+            result.error("NOT_CONNECTED", "No active printer connection", null);
+            return;
+        }
+
+        String parameter = call.argument("parameter");
+        if (parameter == null || parameter.trim().isEmpty()) {
+            result.error("INVALID_ARGUMENT", "Parameter is required", null);
+            return;
+        }
+
+        executor.execute(() -> {
+            try {
+                Log.d(TAG, "Getting SGD parameter: " + parameter);
+                
+                // Use ZPL getvar command for consistency with iOS
+                String zplCommand = String.format("! U1 getvar \"%s\"\r\n", parameter);
+                Log.d(TAG, "Sending ZPL getvar command: " + zplCommand.replace("\r\n", "\\r\\n"));
+                
+                // Send the command
+                activeConnection.write(zplCommand.getBytes());
+                
+                // Wait for response
+                Thread.sleep(1000);
+                
+                // Try to read response
+                String response = "";
+                try {
+                    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+                    activeConnection.read(outputStream);
+                    byte[] responseBytes = outputStream.toByteArray();
+                    if (responseBytes.length > 0) {
+                        response = new String(responseBytes).trim();
+                        response = response.replaceAll("\"", ""); // Remove quotes
+                        response = response.replace("\0", ""); // Remove null characters
+                        Log.d(TAG, "Got SGD parameter response: " + response);
+                    }
+                    outputStream.close();
+                } catch (Exception e) {
+                    Log.d(TAG, "Error reading response: " + e.getMessage());
+                    response = "";
+                }
+
+                final String finalResponse = response;
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    result.success(finalResponse);
+                });
+
+            } catch (Exception e) {
+                Log.e(TAG, "Error getting SGD parameter", e);
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    result.error("GET_FAILED", "Failed to get SGD parameter: " + e.getMessage(), null);
+                });
+            }
+        });
+    }
+
+    private void setSgdParameter(MethodCall call, Result result) {
+        if (activeConnection == null || !activeConnection.isConnected()) {
+            result.error("NOT_CONNECTED", "No active printer connection", null);
+            return;
+        }
+
+        String parameter = call.argument("parameter");
+        String value = call.argument("value");
+        
+        if (parameter == null || parameter.trim().isEmpty()) {
+            result.error("INVALID_ARGUMENT", "Parameter is required", null);
+            return;
+        }
+        
+        if (value == null) {
+            result.error("INVALID_ARGUMENT", "Value is required", null);
+            return;
+        }
+
+        executor.execute(() -> {
+            try {
+                Log.d(TAG, "Setting SGD parameter " + parameter + " to " + value);
+                
+                // Use ZPL setvar command for consistency with iOS
+                String zplCommand = String.format("! U1 setvar \"%s\" \"%s\"\r\n", parameter, value);
+                Log.d(TAG, "Sending ZPL setvar command: " + zplCommand.replace("\r\n", "\\r\\n"));
+                
+                activeConnection.write(zplCommand.getBytes());
+                
+                // Wait for command to be processed
+                Thread.sleep(1000);
+                
+                Log.d(TAG, "Successfully sent SGD setvar command");
+                
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    result.success(null);
+                });
+
+            } catch (Exception e) {
+                Log.e(TAG, "Error setting SGD parameter", e);
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    result.error("SET_FAILED", "Failed to set SGD parameter: " + e.getMessage(), null);
+                });
+            }
+        });
+    }
+
+    private void getPrinterDimensions(Result result) {
+        if (activeConnection == null || !activeConnection.isConnected()) {
+            result.error("NOT_CONNECTED", "No active printer connection", null);
+            return;
+        }
+
+        executor.execute(() -> {
+            try {
+                Log.d(TAG, "Getting printer dimensions");
+                java.util.Map<String, Integer> dimensions = new java.util.HashMap<>();
+                
+                // Initialize default values
+                dimensions.put("labelLengthInDots", 0);
+                dimensions.put("printWidthInDots", 0);
+                dimensions.put("dpi", 0);
+                dimensions.put("maxPrintWidthInDots", 0);
+                dimensions.put("mediaWidthInDots", 0);
+                
+                // Get ZebraPrinter instance for status queries
+                ZebraPrinter zebraPrinter = ZebraPrinterFactory.getInstance(activeConnection);
+                if (zebraPrinter != null) {
+                    // Get printer status which includes label length in dots
+                    PrinterStatus status = zebraPrinter.getCurrentStatus();
+                    if (status != null) {
+                        dimensions.put("labelLengthInDots", status.labelLengthInDots);
+                        Log.d(TAG, "Label length in dots: " + status.labelLengthInDots);
+                    }
+                }
+                
+                // Use helper method to get SGD values
+                String printWidth = getSgdValue("ezpl.print_width");
+                if (printWidth != null && !printWidth.isEmpty()) {
+                    try {
+                        dimensions.put("printWidthInDots", Integer.parseInt(printWidth));
+                        Log.d(TAG, "Print width in dots: " + printWidth);
+                    } catch (NumberFormatException e) {
+                        Log.d(TAG, "Invalid print width value: " + printWidth);
+                    }
+                }
+                
+                String dpi = getSgdValue("device.resolution");
+                if (dpi != null && !dpi.isEmpty()) {
+                    try {
+                        dimensions.put("dpi", Integer.parseInt(dpi));
+                        Log.d(TAG, "Printer DPI: " + dpi);
+                    } catch (NumberFormatException e) {
+                        Log.d(TAG, "Invalid DPI value: " + dpi);
+                    }
+                }
+                
+                String maxPrintWidth = getSgdValue("ezpl.max_print_width");
+                if (maxPrintWidth != null && !maxPrintWidth.isEmpty()) {
+                    try {
+                        dimensions.put("maxPrintWidthInDots", Integer.parseInt(maxPrintWidth));
+                        Log.d(TAG, "Max print width in dots: " + maxPrintWidth);
+                    } catch (NumberFormatException e) {
+                        Log.d(TAG, "Invalid max print width value: " + maxPrintWidth);
+                    }
+                }
+                
+                String mediaWidth = getSgdValue("ezpl.media_width");
+                if (mediaWidth != null && !mediaWidth.isEmpty()) {
+                    try {
+                        dimensions.put("mediaWidthInDots", Integer.parseInt(mediaWidth));
+                        Log.d(TAG, "Media width in dots: " + mediaWidth);
+                    } catch (NumberFormatException e) {
+                        Log.d(TAG, "Invalid media width value: " + mediaWidth);
+                    }
+                }
+                
+                Log.d(TAG, "Returning printer dimensions: " + dimensions);
+                
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    result.success(dimensions);
+                });
+
+            } catch (Exception e) {
+                Log.e(TAG, "Error getting printer dimensions", e);
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    result.error("QUERY_FAILED", "Failed to query printer dimensions: " + e.getMessage(), null);
+                });
+            }
+        });
+    }
+
+    // Helper method to get SGD values using ZPL commands
+    private String getSgdValue(String parameter) {
+        try {
+            String zplCommand = String.format("! U1 getvar \"%s\"\r\n", parameter);
+            activeConnection.write(zplCommand.getBytes());
+            Thread.sleep(500);
+            
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            activeConnection.read(outputStream);
+            byte[] responseBytes = outputStream.toByteArray();
+            String response = "";
+            if (responseBytes.length > 0) {
+                response = new String(responseBytes).trim();
+                response = response.replaceAll("\"", "");
+                response = response.replace("\0", "");
+            }
+            outputStream.close();
+            
+            return response.isEmpty() ? null : response;
+        } catch (Exception e) {
+            Log.d(TAG, "Failed to get SGD value for " + parameter + ": " + e.getMessage());
+            return null;
+        }
+    }
+
+    private void setLabelLength(MethodCall call, Result result) {
+        if (activeConnection == null || !activeConnection.isConnected()) {
+            result.error("NOT_CONNECTED", "No active printer connection", null);
+            return;
+        }
+
+        Integer lengthInDots = call.argument("lengthInDots");
+        if (lengthInDots == null || lengthInDots <= 0) {
+            result.error("INVALID_ARGUMENT", "Valid lengthInDots is required", null);
+            return;
+        }
+
+        executor.execute(() -> {
+            try {
+                Log.d(TAG, "Setting label length to " + lengthInDots + " dots");
+                
+                // Use ZPL ^LL command to set label length for immediate effect
+                String zplCommand = String.format("^XA^LL%d^XZ\r\n", lengthInDots);
+                Log.d(TAG, "Sending ZPL label length command: " + zplCommand.replace("\r\n", "\\r\\n"));
+                
+                activeConnection.write(zplCommand.getBytes());
+                
+                // Wait for command to be processed
+                Thread.sleep(500);
+                
+                Log.d(TAG, "Successfully set label length to " + lengthInDots + " dots");
+                
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    result.success(null);
+                });
+
+            } catch (Exception e) {
+                Log.e(TAG, "Error setting label length", e);
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    result.error("SET_FAILED", "Failed to set label length: " + e.getMessage(), null);
+                });
+            }
+        });
     }
 }
