@@ -91,6 +91,11 @@ class ZebraPrinter {
     return _platform.setSgdParameter(parameter, value);
   }
 
+  /// Sets the label length using ZPL ^LL command for immediate effect
+  static Future<void> setLabelLength(int lengthInDots) {
+    return _platform.setLabelLength(lengthInDots);
+  }
+
   /// Requests Bluetooth permissions from the user (Android only)
   static Future<bool> requestBluetoothPermissions() {
     return _platform.requestBluetoothPermissions();

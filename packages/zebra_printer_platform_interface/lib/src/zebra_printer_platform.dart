@@ -126,4 +126,9 @@ abstract class ZebraPrinterPlatform extends PlatformInterface {
   Future<Map<String, int>> getPrinterDimensions() {
     throw UnimplementedError('getPrinterDimensions() has not been implemented.');
   }
+
+  /// Sets the label length using ZPL ^LL command for immediate effect
+  Future<void> setLabelLength(int lengthInDots) {
+    throw UnimplementedError('setLabelLength() has not been implemented.');
+  }
 }

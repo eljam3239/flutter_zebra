@@ -59,6 +59,8 @@
     [self isConnectedWithResult:result];
   } else if ([@"getPrinterDimensions" isEqualToString:call.method]) {
     [self getPrinterDimensionsWithResult:result];
+  } else if ([@"setLabelLength" isEqualToString:call.method]) {
+    [self setLabelLength:call result:result];
   } else {
     result(FlutterMethodNotImplemented);
   }
@@ -905,6 +907,56 @@
       } else {
         result([FlutterError errorWithCode:@"QUERY_FAILED"
                                    message:@"Failed to query printer dimensions"
+                                   details:nil]);
+      }
+    });
+  });
+}
+
+- (void)setLabelLength:(FlutterMethodCall*)call result:(FlutterResult)result {
+  NSLog(@"[ZebraPrinter] Setting label length...");
+  
+  if (!self.activeConnection || ![self.activeConnection isConnected]) {
+    result([FlutterError errorWithCode:@"NOT_CONNECTED"
+                               message:@"No active printer connection"
+                               details:nil]);
+    return;
+  }
+  
+  NSDictionary *args = call.arguments;
+  NSNumber *lengthInDots = args[@"lengthInDots"];
+  
+  if (!lengthInDots || [lengthInDots integerValue] <= 0) {
+    result([FlutterError errorWithCode:@"INVALID_ARGUMENT"
+                               message:@"Valid lengthInDots is required"
+                               details:nil]);
+    return;
+  }
+  
+  dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+    NSError *error = nil;
+    NSInteger length = [lengthInDots integerValue];
+    
+    // Use ZPL ^LL command to set label length for immediate effect
+    NSString *zplCommand = [NSString stringWithFormat:@"^XA^LL%ld^XZ\r\n", (long)length];
+    NSLog(@"[ZebraPrinter] Sending ZPL label length command: '%@'", [zplCommand stringByReplacingOccurrencesOfString:@"\r\n" withString:@"\\r\\n"]);
+    
+    NSData *commandData = [zplCommand dataUsingEncoding:NSUTF8StringEncoding];
+    NSInteger bytesWritten = [self.activeConnection write:commandData error:&error];
+    
+    NSLog(@"[ZebraPrinter] Label length write result: %ld bytes, error: %@", (long)bytesWritten, error ? error.localizedDescription : @"none");
+    
+    // Wait for command to be processed
+    [NSThread sleepForTimeInterval:0.5];
+    
+    dispatch_async(dispatch_get_main_queue(), ^{
+      if (error == nil && bytesWritten > 0) {
+        NSLog(@"[ZebraPrinter] Successfully set label length to %ld dots", (long)length);
+        result(nil);
+      } else {
+        NSLog(@"[ZebraPrinter] Failed to set label length: %@", error ? error.localizedDescription : @"No data written");
+        result([FlutterError errorWithCode:@"SET_FAILED"
+                                   message:[NSString stringWithFormat:@"Failed to set label length: %@", error ? error.localizedDescription : @"No data written"]
                                    details:nil]);
       }
     });

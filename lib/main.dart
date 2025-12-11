@@ -821,7 +821,12 @@ class _MyHomePageState extends State<MyHomePage> {
       await ZebraPrinter.setSgdParameter('ezpl.print_width', widthInDots.toString());
       print('[Flutter] Set ezpl.print_width to $widthInDots dots');
       
-      // Set the label length using SGD command (in inches, as per spec)
+      // Set the label length using ZPL ^LL command for immediate effect (in dots)
+      final heightInDots = (double.parse(height) * dpi).round();
+      await ZebraPrinter.setLabelLength(heightInDots);
+      print('[Flutter] Set label length to $heightInDots dots (${height}") using ZPL ^LL command');
+      
+      // Also set the label length max using SGD command (in inches, as per spec)
       await ZebraPrinter.setSgdParameter('ezpl.label_length_max', height);
       print('[Flutter] Set ezpl.label_length_max to $height inches');
       
@@ -836,7 +841,7 @@ class _MyHomePageState extends State<MyHomePage> {
       
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Set dimensions: ${width}" x ${height}" ($widthInDots dots width)')),
+        SnackBar(content: Text('Set dimensions: ${width}" x ${height}" ($widthInDots x $heightInDots dots)')),
       );
       
       print('[Flutter] Successfully set printer width');

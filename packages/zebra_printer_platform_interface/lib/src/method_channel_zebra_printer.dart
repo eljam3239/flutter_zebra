@@ -167,4 +167,11 @@ class MethodChannelZebraPrinter extends ZebraPrinterPlatform {
     }
     return dimensions;
   }
+
+  @override
+  Future<void> setLabelLength(int lengthInDots) async {
+    await methodChannel.invokeMethod<void>('setLabelLength', {
+      'lengthInDots': lengthInDots,
+    });
+  }
 }
