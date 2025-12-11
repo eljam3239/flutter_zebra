@@ -545,17 +545,156 @@
 }
 
 - (void)getSgdParameter:(FlutterMethodCall*)call result:(FlutterResult)result {
-  // TODO: Implement get SGD parameter
-  result([FlutterError errorWithCode:@"UNIMPLEMENTED"
-                             message:@"getSgdParameter not yet implemented"
-                             details:nil]);
+  NSLog(@"[ZebraPrinter] Getting SGD parameter...");
+  
+  if (!self.activeConnection || ![self.activeConnection isConnected]) {
+    result([FlutterError errorWithCode:@"NOT_CONNECTED"
+                               message:@"No active printer connection"
+                               details:nil]);
+    return;
+  }
+  
+  NSString *parameter = call.arguments[@"parameter"];
+  
+  if (!parameter || [parameter length] == 0) {
+    result([FlutterError errorWithCode:@"INVALID_ARGUMENT"
+                               message:@"Parameter is required"
+                               details:nil]);
+    return;
+  }
+  
+  dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+    NSError *error = nil;
+    
+    // Use the exact ZPL getvar format from your documentation
+    NSString *zplCommand = [NSString stringWithFormat:@"! U1 getvar \"%@\"\r\n", parameter];
+    NSLog(@"[ZebraPrinter] Sending exact ZPL getvar command: '%@'", [zplCommand stringByReplacingOccurrencesOfString:@"\r\n" withString:@"\\r\\n"]);
+    
+    NSData *commandData = [zplCommand dataUsingEncoding:NSUTF8StringEncoding];
+    NSInteger bytesWritten = [self.activeConnection write:commandData error:&error];
+    
+    NSLog(@"[ZebraPrinter] Write result: %ld bytes, error: %@", (long)bytesWritten, error ? error.localizedDescription : @"none");
+    
+    if (error != nil || bytesWritten <= 0) {
+      NSLog(@"[ZebraPrinter] ZPL getvar write failed, using SGD GET fallback");
+      NSString *sgdValue = [SGD GET:parameter withPrinterConnection:self.activeConnection error:&error];
+      
+      dispatch_async(dispatch_get_main_queue(), ^{
+        if (error == nil && sgdValue != nil) {
+          NSLog(@"[ZebraPrinter] SGD GET fallback successful: '%@'", sgdValue);
+          result(sgdValue);
+        } else {
+          NSLog(@"[ZebraPrinter] Both ZPL getvar write and SGD GET failed: %@", error ? error.localizedDescription : @"No value");
+          result(@""); 
+        }
+      });
+      return;
+    }
+    
+    // Wait longer for response
+    [NSThread sleepForTimeInterval:1.0];
+    
+    // Try to read response multiple times
+    NSMutableData *responseData = [NSMutableData data];
+    for (int attempt = 0; attempt < 3; attempt++) {
+      NSError *readError = nil;
+      
+      @try {
+        NSData *buffer = [self.activeConnection read:&readError];
+        if (buffer && [buffer length] > 0) {
+          [responseData appendData:buffer];
+          NSLog(@"[ZebraPrinter] Read attempt %d: got %lu bytes", attempt + 1, (unsigned long)[buffer length]);
+        } else {
+          NSLog(@"[ZebraPrinter] Read attempt %d: no data, error: %@", attempt + 1, readError ? readError.localizedDescription : @"none");
+        }
+      } @catch (NSException *exception) {
+        NSLog(@"[ZebraPrinter] Read attempt %d exception: %@", attempt + 1, exception.reason);
+      }
+      
+      // Small delay between read attempts
+      if (attempt < 2) [NSThread sleepForTimeInterval:0.2];
+    }
+    
+    dispatch_async(dispatch_get_main_queue(), ^{
+      if ([responseData length] > 0) {
+        NSString *responseString = [[NSString alloc] initWithData:responseData encoding:NSUTF8StringEncoding];
+        NSString *cleanResponse = [responseString stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        cleanResponse = [cleanResponse stringByReplacingOccurrencesOfString:@"\"" withString:@""];
+        
+        NSLog(@"[ZebraPrinter] Got ZPL getvar response: '%@' (raw: '%@')", cleanResponse, responseString);
+        result(cleanResponse);
+      } else {
+        NSLog(@"[ZebraPrinter] No response from ZPL getvar after 3 attempts, using SGD GET fallback");
+        NSError *sgdError = nil;
+        NSString *sgdValue = [SGD GET:parameter withPrinterConnection:self.activeConnection error:&sgdError];
+        
+        if (sgdError == nil && sgdValue != nil) {
+          NSLog(@"[ZebraPrinter] SGD GET fallback successful: '%@'", sgdValue);
+          result(sgdValue);
+        } else {
+          NSLog(@"[ZebraPrinter] All methods failed, returning empty string");
+          result(@"");
+        }
+      }
+    });
+  });
 }
 
 - (void)setSgdParameter:(FlutterMethodCall*)call result:(FlutterResult)result {
-  // TODO: Implement set SGD parameter
-  result([FlutterError errorWithCode:@"UNIMPLEMENTED"
-                             message:@"setSgdParameter not yet implemented"
-                             details:nil]);
+  NSLog(@"[ZebraPrinter] Setting SGD parameter...");
+  
+  if (!self.activeConnection || ![self.activeConnection isConnected]) {
+    result([FlutterError errorWithCode:@"NOT_CONNECTED"
+                               message:@"No active printer connection"
+                               details:nil]);
+    return;
+  }
+  
+  NSDictionary *args = call.arguments;
+  NSString *parameter = args[@"parameter"];
+  NSString *value = args[@"value"];
+  
+  if (!parameter || [parameter length] == 0) {
+    result([FlutterError errorWithCode:@"INVALID_ARGUMENT"
+                               message:@"Parameter is required"
+                               details:nil]);
+    return;
+  }
+  
+  if (!value) {
+    result([FlutterError errorWithCode:@"INVALID_ARGUMENT"
+                               message:@"Value is required"
+                               details:nil]);
+    return;
+  }
+  
+  dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+    NSError *error = nil;
+    
+    // Use the exact ZPL setvar format from your documentation
+    NSString *zplCommand = [NSString stringWithFormat:@"! U1 setvar \"%@\" \"%@\"\r\n", parameter, value];
+    NSLog(@"[ZebraPrinter] Sending exact ZPL setvar command: '%@'", [zplCommand stringByReplacingOccurrencesOfString:@"\r\n" withString:@"\\r\\n"]);
+    
+    NSData *commandData = [zplCommand dataUsingEncoding:NSUTF8StringEncoding];
+    NSInteger bytesWritten = [self.activeConnection write:commandData error:&error];
+    
+    NSLog(@"[ZebraPrinter] Write result: %ld bytes, error: %@", (long)bytesWritten, error ? error.localizedDescription : @"none");
+    
+    // Wait longer for command to be processed
+    [NSThread sleepForTimeInterval:1.0];
+    
+    dispatch_async(dispatch_get_main_queue(), ^{
+      if (error == nil && bytesWritten > 0) {
+        NSLog(@"[ZebraPrinter] Successfully sent setvar command (%ld bytes)", (long)bytesWritten);
+        result(nil);
+      } else {
+        NSLog(@"[ZebraPrinter] Failed to send setvar command: %@", error ? error.localizedDescription : @"No bytes written");
+        result([FlutterError errorWithCode:@"SET_FAILED"
+                                   message:[NSString stringWithFormat:@"Failed to send setvar: %@", error ? error.localizedDescription : @"No data written"]
+                                   details:nil]);
+      }
+    });
+  });
 }
 
 - (void)getStatusWithResult:(FlutterResult)result {

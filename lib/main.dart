@@ -741,6 +741,114 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  Future<void> _setPrinterDimensions() async {
+    if (!_isConnected) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please connect to a printer first')),
+      );
+      return;
+    }
+
+    // Show dialog to input width and height
+    final TextEditingController widthController = TextEditingController();
+    final TextEditingController heightController = TextEditingController();
+
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Set Printer Dimensions'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Enter dimensions in inches:'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: widthController,
+              decoration: const InputDecoration(
+                labelText: 'Width (inches)',
+                hintText: 'e.g. 2.20',
+              ),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: heightController,
+              decoration: const InputDecoration(
+                labelText: 'Height (inches)',
+                hintText: 'e.g. 1.04',
+              ),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              final width = widthController.text.trim();
+              final height = heightController.text.trim();
+              if (width.isNotEmpty && height.isNotEmpty) {
+                Navigator.of(context).pop({'width': width, 'height': height});
+              }
+            },
+            child: const Text('Set'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == null) return;
+
+    try {
+      final width = result['width']!;
+      final height = result['height']!;
+      
+      print('[Flutter] Setting printer dimensions to ${width}x$height inches...');
+      
+      // Get current DPI to convert inches to dots
+      final dimensions = await ZebraPrinter.getPrinterDimensions();
+      final dpi = 203;//dimensions['dpi'] ?? 203; // Default to 203 DPI if not available
+      
+      // Convert inches to dots for width
+      final widthInDots = (double.parse(width) * dpi).round();
+      
+      print('[Flutter] Converting to dots: ${width}" = $widthInDots dots (at $dpi DPI)');
+      
+      // Set the print width using SGD command (in dots)
+      await ZebraPrinter.setSgdParameter('ezpl.print_width', widthInDots.toString());
+      print('[Flutter] Set ezpl.print_width to $widthInDots dots');
+      
+      // Set the label length using SGD command (in inches, as per spec)
+      await ZebraPrinter.setSgdParameter('ezpl.label_length_max', height);
+      print('[Flutter] Set ezpl.label_length_max to $height inches');
+      
+      // Verify the settings were applied
+      try {
+        final newPrintWidth = await ZebraPrinter.getSgdParameter('ezpl.print_width');
+        final newLabelLength = await ZebraPrinter.getSgdParameter('ezpl.label_length_max');
+        print('[Flutter] Verification - print_width: $newPrintWidth, label_length_max: $newLabelLength');
+      } catch (e) {
+        print('[Flutter] Could not verify settings: $e');
+      }
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Set dimensions: ${width}" x ${height}" ($widthInDots dots width)')),
+      );
+      
+      print('[Flutter] Successfully set printer width');
+    } catch (e) {
+      print('[Flutter] Failed to set printer dimensions: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to set dimensions: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -934,6 +1042,10 @@ class _MyHomePageState extends State<MyHomePage> {
                         ElevatedButton(
                           onPressed: _isConnected ? _getPrinterDimensions : null,
                           child: const Text('Get Dimensions'),
+                        ),
+                        ElevatedButton(
+                          onPressed: _isConnected ? _setPrinterDimensions : null,
+                          child: const Text('Set Dimensions'),
                         ),
                         
                       ],
