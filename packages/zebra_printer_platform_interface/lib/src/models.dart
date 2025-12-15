@@ -1,5 +1,31 @@
 /// Data models for zebra printer platform interface
 
+class ReceiptQuantityItemPrice{
+  final String quantity;
+  final String item;
+  final String price;
+
+  const ReceiptQuantityItemPrice({
+    required this.quantity,
+    required this.item,
+    required this.price,
+  });
+  factory ReceiptQuantityItemPrice.fromJson(Map<String, dynamic> json) {
+    return ReceiptQuantityItemPrice(
+      quantity: json['quantity'] ?? '',
+      item: json['item'] ?? '',
+      price: json['price'] ?? '',
+    );
+  }
+  Map<String, dynamic> toJson() {
+    return {
+      'quantity': quantity,
+      'item': item,
+      'price': price,
+    };
+  }
+}
+
 /// Data model for label content
 class LabelData {
   final String productName;
@@ -47,6 +73,7 @@ class ReceiptData {
   final String storeAddress;
   final String cashierName;
   final String laneNumber;
+  final List<ReceiptQuantityItemPrice>? items;
   final String thankYouMessage;
   final Map<String, dynamic>? customFields; // For future extensibility
   const ReceiptData({
@@ -54,6 +81,7 @@ class ReceiptData {
     required this.storeAddress,
     required this.cashierName,
     required this.laneNumber,
+    this.items,
     required this.thankYouMessage,
     this.customFields,
   });
@@ -63,6 +91,9 @@ class ReceiptData {
       storeAddress: json['storeAddress'] ?? '',
       cashierName: json['cashierName'] ?? '',
       laneNumber: json['laneNumber'] ?? '',
+      items: (json['items'] as List<dynamic>?)
+          ?.map((item) => ReceiptQuantityItemPrice.fromJson(item))
+          .toList(),
       thankYouMessage: json['thankYouMessage'] ?? '',
       customFields: json['customFields']?.cast<String, dynamic>(),
     );
@@ -73,6 +104,8 @@ class ReceiptData {
       'storeAddress': storeAddress,
       'cashierName': cashierName,
       'laneNumber': laneNumber,
+      if (items != null)
+        'items': items!.map((item) => item.toJson()).toList(),
       'thankYouMessage': thankYouMessage,
       if (customFields != null) 'customFields': customFields,
     };
