@@ -1069,21 +1069,57 @@ class _MyHomePageState extends State<MyHomePage> {
     final now = receiptData.transactionDate ?? DateTime.now();
     final formattedDate = "${_getWeekday(now.weekday)} ${_getMonth(now.month)} ${now.day} ${now.hour}:${now.minute.toString().padLeft(2, '0')} ${now.hour >= 12 ? 'PM' : 'AM'}";
     
-    // Build ZPL string dynamically using actual form data
+    // Helper function to get character width in dots based on font size and DPI
+    int getCharWidthInDots(int fontSize, int dpi) {
+      if (fontSize <= 25) {
+        return 10; // For smaller fonts like size 25
+      } else if (fontSize <= 30) {
+        return 12; // For medium fonts like size 30
+      } else if (fontSize <= 38) {
+        return 20; // For medium fonts like size 38  
+      } else if (fontSize <= 47) {
+        return 24; // For larger fonts like size 47
+      } else {
+        return (fontSize * 0.5).round(); // For even larger fonts, scale proportionally
+      }
+    }
+    
+    // Calculate centered positions for store name and address
+    int storeNameCharWidth = getCharWidthInDots(47, dpi);
+    int storeAddressCharWidth = getCharWidthInDots(27, dpi);
+    
+    int estimatedStoreNameWidth = receiptData.storeName.length * storeNameCharWidth;
+    int estimatedStoreAddressWidth = receiptData.storeAddress.length * storeAddressCharWidth;
+    
+    int storeNameX = (width - estimatedStoreNameWidth) ~/ 2;
+    int storeAddressX = (width - estimatedStoreAddressWidth) ~/ 2;
+    
+    // Ensure positions don't go negative
+    storeNameX = storeNameX.clamp(0, width - estimatedStoreNameWidth);
+    storeAddressX = storeAddressX.clamp(0, width - estimatedStoreAddressWidth);
+    
+    print('[Flutter] Receipt positioning - Store Name: ($storeNameX,64), Store Address: ($storeAddressX,388)');
+    
+    // Build ZPL string dynamically using actual form data with calculated positions
     String receiptZpl = '''
 ^XA
 ^CF0,47
-^FO226,64
+^FO$storeNameX,64
 ^FD${receiptData.storeName}^FS
 ^CF0,27
-^FO156,388
+^FO$storeAddressX,388
 ^FD${receiptData.storeAddress}^FS''';
 
-    // Add phone if provided
+    // Add phone if provided (centered)
     if (receiptData.storePhone != null) {
+      int storePhoneCharWidth = getCharWidthInDots(25, dpi);
+      int estimatedStorePhoneWidth = receiptData.storePhone!.length * storePhoneCharWidth;
+      int storePhoneX = (width - estimatedStorePhoneWidth) ~/ 2;
+      storePhoneX = storePhoneX.clamp(0, width - estimatedStorePhoneWidth);
+      
       receiptZpl += '''
 ^CF0,25
-^FO200,420
+^FO$storePhoneX,420
 ^FD${receiptData.storePhone}^FS''';
     }
 
@@ -1139,18 +1175,30 @@ class _MyHomePageState extends State<MyHomePage> {
     receiptZpl += '''
 ^FO44,778^GB554,1,2,B,0^FS''';
 
-    // Add total using the correct getter
+    // Add total using the correct getter (centered)
     final total = receiptData.calculatedTotal;
+    int totalCharWidth = getCharWidthInDots(35, dpi);
+    String totalText = "Total: \$${total.toStringAsFixed(2)}";
+    int estimatedTotalWidth = totalText.length * totalCharWidth;
+    int totalX = (width - estimatedTotalWidth) ~/ 2;
+    totalX = totalX.clamp(0, width - estimatedTotalWidth);
+    
     receiptZpl += '''
 ^CF0,35
-^FO400,800
-^FDTotal: \$${total.toStringAsFixed(2)}^FS''';
+^FO$totalX,800
+^FD$totalText^FS''';
 
-    // Add thank you message
+    // Add thank you message (centered)
+    String thankYouMsg = receiptData.thankYouMessage ?? 'Thank you for shopping with us!';
+    int thankYouCharWidth = getCharWidthInDots(30, dpi);
+    int estimatedThankYouWidth = thankYouMsg.length * thankYouCharWidth;
+    int thankYouX = (width - estimatedThankYouWidth) ~/ 2;
+    thankYouX = thankYouX.clamp(0, width - estimatedThankYouWidth);
+    
     receiptZpl += '''
 ^CF0,30
-^FO188,834
-^FD${receiptData.thankYouMessage ?? 'Thank you for shopping with us!'}^FS
+^FO$thankYouX,834
+^FD$thankYouMsg^FS
 ^XZ''';
 
     return receiptZpl;
