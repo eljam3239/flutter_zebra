@@ -40,10 +40,60 @@ class _MyHomePageState extends State<MyHomePage> {
   String _macAddress = '';
   final TextEditingController _macAddressController = TextEditingController();
 
+  // Receipt form state
+  bool _showReceiptForm = false;
+  final TextEditingController _storeNameController = TextEditingController();
+  final TextEditingController _storeAddressController = TextEditingController();
+  final TextEditingController _storePhoneController = TextEditingController();
+  final TextEditingController _receiptNumberController = TextEditingController();
+  final TextEditingController _cashierNameController = TextEditingController();
+  final TextEditingController _laneNumberController = TextEditingController();
+  final TextEditingController _thankYouMessageController = TextEditingController();
+  List<Map<String, TextEditingController>> _lineItemControllers = [];
+
   @override
   void dispose() {
     _macAddressController.dispose();
+    _storeNameController.dispose();
+    _storeAddressController.dispose();
+    _storePhoneController.dispose();
+    _receiptNumberController.dispose();
+    _cashierNameController.dispose();
+    _laneNumberController.dispose();
+    _thankYouMessageController.dispose();
+    for (var controllerMap in _lineItemControllers) {
+      controllerMap['quantity']?.dispose();
+      controllerMap['item']?.dispose();
+      controllerMap['price']?.dispose();
+    }
     super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _addLineItem(); // Add initial line item
+  }
+
+  void _addLineItem() {
+    setState(() {
+      _lineItemControllers.add({
+        'quantity': TextEditingController(),
+        'item': TextEditingController(),
+        'price': TextEditingController(),
+      });
+    });
+  }
+
+  void _removeLineItem(int index) {
+    if (_lineItemControllers.length > 1) {
+      setState(() {
+        _lineItemControllers[index]['quantity']?.dispose();
+        _lineItemControllers[index]['item']?.dispose();
+        _lineItemControllers[index]['price']?.dispose();
+        _lineItemControllers.removeAt(index);
+      });
+    }
   }
 
   void _clearDiscoveries() {
@@ -575,6 +625,73 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  ReceiptData _buildReceiptDataFromForm() {
+    // Build line items from controllers
+    List<ReceiptLineItem> items = [];
+    for (var controllerMap in _lineItemControllers) {
+      final qtyText = controllerMap['quantity']?.text.trim() ?? '';
+      final itemText = controllerMap['item']?.text.trim() ?? '';
+      final priceText = controllerMap['price']?.text.trim() ?? '';
+      
+      // Only add line item if all fields have values
+      if (qtyText.isNotEmpty && itemText.isNotEmpty && priceText.isNotEmpty) {
+        final qty = int.tryParse(qtyText) ?? 0;
+        final price = double.tryParse(priceText) ?? 0.0;
+        
+        if (qty > 0 && price > 0.0) {
+          items.add(ReceiptLineItem(
+            quantity: qty,
+            itemName: itemText,
+            unitPrice: price,
+          ));
+        }
+      }
+    }
+    
+    // Debug: Print what we're getting from the form
+    print('[Flutter] Form values captured:');
+    print('[Flutter] - Store Name: "${_storeNameController.text.trim()}"');
+    print('[Flutter] - Store Address: "${_storeAddressController.text.trim()}"');
+    print('[Flutter] - Store Phone: "${_storePhoneController.text.trim()}"');
+    print('[Flutter] - Receipt Number: "${_receiptNumberController.text.trim()}"');
+    print('[Flutter] - Cashier Name: "${_cashierNameController.text.trim()}"');
+    print('[Flutter] - Lane Number: "${_laneNumberController.text.trim()}"');
+    print('[Flutter] - Thank You Message: "${_thankYouMessageController.text.trim()}"');
+    print('[Flutter] - Line Items: ${items.length} items');
+    for (int i = 0; i < items.length; i++) {
+      print('[Flutter]   Item ${i + 1}: ${items[i].toString()}');
+    }
+    
+    final receiptData = ReceiptData(
+      storeName: _storeNameController.text.trim().isEmpty 
+          ? 'My Store' 
+          : _storeNameController.text.trim(),
+      storeAddress: _storeAddressController.text.trim().isEmpty 
+          ? '123 Main Street' 
+          : _storeAddressController.text.trim(),
+      storePhone: _storePhoneController.text.trim().isEmpty 
+          ? null 
+          : _storePhoneController.text.trim(),
+      receiptNumber: _receiptNumberController.text.trim().isEmpty 
+          ? null 
+          : _receiptNumberController.text.trim(),
+      transactionDate: DateTime.now(),
+      cashierName: _cashierNameController.text.trim().isEmpty 
+          ? null 
+          : _cashierNameController.text.trim(),
+      laneNumber: _laneNumberController.text.trim().isEmpty 
+          ? null 
+          : _laneNumberController.text.trim(),
+      items: items,
+      thankYouMessage: _thankYouMessageController.text.trim().isEmpty 
+          ? 'Thank you for shopping with us!' 
+          : _thankYouMessageController.text.trim(),
+    );
+    
+    print('[Flutter] Final ReceiptData: ${receiptData.toString()}');
+    return receiptData;
+  }
+
   Future<void> _printReceipt() async {
     if (!_isConnected) {
       if (!mounted) return;
@@ -585,53 +702,22 @@ class _MyHomePageState extends State<MyHomePage> {
     }
 
     try {
+      if (_connectedPrinter == null) {
+        throw Exception('No connected printer information available');
+      }
+      
+      // Use actual detected dimensions, with fallbacks
+      final width = _connectedPrinter!.printWidthInDots ?? 386; // fallback to ZD410 width
+      final height = _connectedPrinter!.labelLengthInDots ?? 212; // fallback to common label height
+      final dpi = _connectedPrinter!.dpi ?? 203; // fallback to common Zebra DPI
+      
+      print('[Flutter] Using printer dimensions: ${width}x${height} @ ${dpi}dpi');
+      
+      // Build receipt data from form inputs
+      final receiptData = _buildReceiptDataFromForm();
+      
       // Use the receipt ZPL
-      const receiptZpl = '''
-^XA
-^CF0,47
-^FO226,64
-^FDTest Store^FS
-^CF0,27
-^FO156,388
-^FD100 LeBron St, Cleveland, OH^FS
-^CF0,30
-^FO470,478
-^FDCashier: Eli^FS
-^CF0,30
-^FO470,526
-^FDLane: 1^FS
-^CF0,30
-^FO188,834
-^FDThank you for coming!^FS
-^CF0,30
-^FO20,478
-^FDTue Nov 11 4:03 PM^FS
-^FO200,132
-^GFA,7200,7200,30,!::::::::::::::::::::::::::::::::::::::::::::::gVF03!gTFCJ0!gTFL0!XFCH0RF8L03!:WFEJ07OFEM01!WFK01OFCN0!VFCL03NFO01!VF8L01MFEP0!UFCN0MFCP07!:UF8N07LF8I01HFJ07!UFO03LFI01IFCI03!UFI03HFJ0LFI07IFK0!TFEI0IFJ07JFCI0IFEK0!TFCH03HFEJ07JFCH03IFEK07!:TFCH0IFEJ03JF8H07IFEH08H07!TFH01IFE02H03JF8H0JFE03CH07!TFH03JF03H01JFI0KF03EH03!TFH03JFCFC01JFH01MFEH03!SFEH07LFC01JFH01MFEH03!:SFEH07LFCH0JFH01NFH01!SFEH07LFEH0IFEH03NFH01!SFEH0MFEH0IFEH03NFH01!:::SFEH0MFEH0HF9EH03NFH01!SFEH0MFEH0FC0EH03NFH01!SFEH0MFEH0FH0EH03NFH01!SFEH07LFEH0EH0EH03NFH01!SFEH07LFC01CH03H01NFH01!:SFEH07LFCK03H01MFEH03!TFH03LFL01I0MFEH03!TFH03LFL01I0MFCH03!TFH01KFEL018H07LFCH07!TFCH0KFCM08H03LF8H07!:TFCH03JF8M0CH03LFI07!TFEI0IFCN04I0LF8H0!UFH03JFN07H03LFE03!UF81KFEM0380NFC3!UF87LFM0381OF7!:gIFN0C3!gIFN07!gHFEN03!gHFCN01!gHFCO0!:gHFCO03!gHF8O01!gHF8P07!gHF8P03!gHF8Q07!:gHF8R0!gHFES0!gHFES03!gIFT07!gIFCS0!:gIFER03!gJFR07!gJFQ01!gJF8P03!gJFCO01!:gKF8N07!gKFCM03!gKFEM0!gLFCK03!gMFJ07!:gNFH0!!:::::::::::::gFH0!XFCK07!:WFCM01!VFEP0!VFR0!UF8R01!TFET01!:TFCU07!SFEW0!SFCW01!SFY03!RFCg0!:RF8g03!RFgH07!QFEgH01!QFCgI03!QFgJ01!:PFEgK07XFC!PFCgL0XF0!PFCgL07VF80!MFgP01UFCH0!LFgR0UFCH0!:KFC03FCgN01UFC0!KF03HFCgO0UFC0!JFE0IF8gO07TFC0!JF81IFgR0SFC0!JF83IFgS03QFC0!:JF0IFEgT01PFC0!IFC1IFCgU03OFC0!IF81IFCgV07NFC0!IF83IFgX0NFC0!IF03IFgX03MFC0!:IF07HFEgX01MFC0!IF07HFEgY03LFC0!HFE07HFEh0LFC0!HFE07HFEh07KFC0!HFE07HFEhG07JFC0!:HFE07HFEhH03IFC0!HFC0IFEhH01IFC0!HFC0JFhI0IFC0!HFC07IFhI07HFC0!HFC07IFChH07HFC0!:HFC07IFEhH07HFC0!HFC07JFU078gK03HFC0!HFC07JF8T07gL03HFC0!HFE07KFQ07E04gM0HFC0!HFE07KFCN01HFE04gM07FC0!:HFE03LFEM0IFEgO03FC0!HFE03NFE07FE0IFEgO01FC0!IF03NFE0HFE0IFEgO01FC0!IF01NFE0HFE0IFEgP0FC0!IF80NFC1HFE0IFEgP03C0!:IF80NFC1HFE0IFEgP01C0!IFC03MF83HFE0IFEgQ0C0!IFC01MF8IFE0IFEgQ0C0!JFH0MF0IFE07HFEgQ040!JF807KFC1IFE07HFEgQ040!:JFC03KF83IFE07HFCgS0!JFEH0KF07JF03HF8gS0!KFH03IFC3KFH0HFgT03!JFCI03FC07KF8gX0!JF8L01LFCI0CgT03HF:JF83CI01NF8078gO03E3!JF1HF8I0QF8gK07!JF3HFEJ03OF8gH07!JF3IFCK0NF8Y07!IFC7JFM0KF8W03!:JF7JFCgL03!PFgJ07!PFCgK0!QFgM0!QFEgN07RFC!:SFK07HF8gG0OFC0!gNFCgJ03!gRFg07!gTF8V0!gVFCQ03!:!:::::::^FS
-^FO44,574^GB554,1,2,B,0^FS
-^FO44,778^GB554,1,2,B,0^FS
-^CF0,30
-^FO20,530
-^FDReceipt No: 67676769^FS
-^CF0,30
-^FO56,612
-^FD1 x Orange^FS
-^CF0,30
-^FO54,670
-^FD1 x Orange^FS
-^CF0,30
-^FO56,724
-^FD1 x Orange^FS
-^CF0,30
-^FO470,614
-^FD\$5.00^FS
-^CF0,30
-^FO470,670
-^FD\$5.00^FS
-^CF0,30
-^FO470,724
-^FD\$5.00^FS
-^XZ''';
+      final receiptZpl = await _generateReceiptZPL(width, height, dpi, receiptData);
       
       await ZebraPrinter.sendCommands(receiptZpl, language: ZebraPrintLanguage.zpl);
 
@@ -1288,6 +1374,207 @@ class _MyHomePageState extends State<MyHomePage> {
                             },
                           ),
                         ],
+                  ],
+                ),
+              ),
+            ),
+
+            // Receipt Form Section
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header with dropdown indicator
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _showReceiptForm = !_showReceiptForm;
+                        });
+                      },
+                      child: Row(
+                        children: [
+                          Text('Receipt Generator', style: Theme.of(context).textTheme.headlineSmall),
+                          const Spacer(),
+                          Icon(_showReceiptForm ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down),
+                        ],
+                      ),
+                    ),
+                    
+                    // Collapsible form
+                    if (_showReceiptForm) ...[
+                      const SizedBox(height: 16),
+                      
+                      // Store Information
+                      Text('Store Information', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _storeNameController,
+                              decoration: const InputDecoration(
+                                labelText: 'Store Name',
+                                hintText: 'My Store',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              controller: _storeAddressController,
+                              decoration: const InputDecoration(
+                                labelText: 'Store Address',
+                                hintText: '123 Main St',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _storePhoneController,
+                              decoration: const InputDecoration(
+                                labelText: 'Phone',
+                                hintText: '(555) 123-4567',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              controller: _receiptNumberController,
+                              decoration: const InputDecoration(
+                                labelText: 'Receipt #',
+                                hintText: '12345',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _cashierNameController,
+                              decoration: const InputDecoration(
+                                labelText: 'Cashier',
+                                hintText: 'John Doe',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              controller: _laneNumberController,
+                              decoration: const InputDecoration(
+                                labelText: 'Lane #',
+                                hintText: '3',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      
+                      const SizedBox(height: 16),
+                      
+                      // Line Items
+                      Text('Line Items', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      
+                      // Line item entries
+                      ...List.generate(_lineItemControllers.length, (index) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8.0),
+                          child: Row(
+                            children: [
+                              SizedBox(
+                                width: 80,
+                                child: TextField(
+                                  controller: _lineItemControllers[index]['quantity'],
+                                  decoration: const InputDecoration(
+                                    labelText: 'Qty',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  keyboardType: TextInputType.number,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                flex: 3,
+                                child: TextField(
+                                  controller: _lineItemControllers[index]['item'],
+                                  decoration: const InputDecoration(
+                                    labelText: 'Item Name',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                flex: 2,
+                                child: TextField(
+                                  controller: _lineItemControllers[index]['price'],
+                                  decoration: const InputDecoration(
+                                    labelText: 'Price',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                ),
+                              ),
+                              if (_lineItemControllers.length > 1) ...[
+                                const SizedBox(width: 8),
+                                IconButton(
+                                  icon: const Icon(Icons.remove_circle, color: Colors.red),
+                                  onPressed: () => _removeLineItem(index),
+                                ),
+                              ],
+                            ],
+                          ),
+                        );
+                      }),
+                      
+                      // Add line item button
+                      Center(
+                        child: IconButton(
+                          icon: const Icon(Icons.add_circle, color: Colors.green, size: 32),
+                          onPressed: _addLineItem,
+                        ),
+                      ),
+                      
+                      const SizedBox(height: 16),
+                      
+                      // Thank you message
+                      TextField(
+                        controller: _thankYouMessageController,
+                        decoration: const InputDecoration(
+                          labelText: 'Thank You Message',
+                          hintText: 'Thank you for shopping with us!',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      
+                      const SizedBox(height: 16),
+                      
+                      // Generate receipt button
+                      Center(
+                        child: ElevatedButton(
+                          onPressed: _isConnected ? _printReceipt : null,
+                          child: const Text('Generate Receipt'),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
