@@ -868,13 +868,20 @@
       NSLog(@"[ZebraPrinter] Failed to get print width: %@", error.localizedDescription);
     }
     
-    // Get printer DPI
-    NSString *dpi = [SGD GET:@"device.resolution" withPrinterConnection:self.activeConnection error:&error];
+    // Get printer DPI using head resolution
+    NSString *dpi = [SGD GET:@"head.resolution.in_dpi" withPrinterConnection:self.activeConnection error:&error];
     if (dpi != nil && error == nil) {
       [dimensions setObject:@([dpi integerValue]) forKey:@"dpi"];
       NSLog(@"[ZebraPrinter] Printer DPI: %@", dpi);
     } else {
       NSLog(@"[ZebraPrinter] Failed to get DPI: %@", error.localizedDescription);
+      
+      // Fallback to device.resolution
+      NSString *fallbackDpi = [SGD GET:@"device.resolution" withPrinterConnection:self.activeConnection error:&error];
+      if (fallbackDpi != nil && error == nil) {
+        [dimensions setObject:@([fallbackDpi integerValue]) forKey:@"dpi"];
+        NSLog(@"[ZebraPrinter] Fallback DPI: %@", fallbackDpi);
+      }
     }
     
     // Get maximum print width (full printer width)
