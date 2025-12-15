@@ -1,28 +1,43 @@
 /// Data models for zebra printer platform interface
 
-class ReceiptQuantityItemPrice{
-  final String quantity;
-  final String item;
-  final String price;
+/// Represents a single line item on a receipt
+class ReceiptLineItem {
+  final int quantity;
+  final String itemName;
+  final double unitPrice;
+  final double? totalPrice; // Calculated field, can be null if auto-calculated
 
-  const ReceiptQuantityItemPrice({
+  const ReceiptLineItem({
     required this.quantity,
-    required this.item,
-    required this.price,
+    required this.itemName,
+    required this.unitPrice,
+    this.totalPrice,
   });
-  factory ReceiptQuantityItemPrice.fromJson(Map<String, dynamic> json) {
-    return ReceiptQuantityItemPrice(
-      quantity: json['quantity'] ?? '',
-      item: json['item'] ?? '',
-      price: json['price'] ?? '',
+
+  /// Calculate the total price for this line item
+  double get calculatedTotal => totalPrice ?? (quantity * unitPrice);
+
+  factory ReceiptLineItem.fromJson(Map<String, dynamic> json) {
+    return ReceiptLineItem(
+      quantity: json['quantity'] ?? 0,
+      itemName: json['itemName'] ?? '',
+      unitPrice: (json['unitPrice'] ?? 0.0).toDouble(),
+      totalPrice: json['totalPrice']?.toDouble(),
     );
   }
+
   Map<String, dynamic> toJson() {
     return {
       'quantity': quantity,
-      'item': item,
-      'price': price,
+      'itemName': itemName,
+      'unitPrice': unitPrice,
+      if (totalPrice != null) 'totalPrice': totalPrice,
     };
+  }
+
+  @override
+  String toString() {
+    return 'ReceiptLineItem($quantity x $itemName @ \$${unitPrice.toStringAsFixed(2)} = \$${calculatedTotal.toStringAsFixed(2)})';
   }
 }
 
@@ -68,47 +83,87 @@ class LabelData {
   }
 }
 
+/// Data model for receipt content
 class ReceiptData {
   final String storeName;
   final String storeAddress;
-  final String cashierName;
-  final String laneNumber;
-  final List<ReceiptQuantityItemPrice>? items;
-  final String thankYouMessage;
+  final String? storePhone;
+  final String? receiptNumber;
+  final DateTime? transactionDate;
+  final String? cashierName;
+  final String? laneNumber;
+  final List<ReceiptLineItem> items;
+  final double? subtotal;
+  final double? tax;
+  final double? total;
+  final String? thankYouMessage;
   final Map<String, dynamic>? customFields; // For future extensibility
+
   const ReceiptData({
     required this.storeName,
     required this.storeAddress,
-    required this.cashierName,
-    required this.laneNumber,
-    this.items,
-    required this.thankYouMessage,
+    this.storePhone,
+    this.receiptNumber,
+    this.transactionDate,
+    this.cashierName,
+    this.laneNumber,
+    this.items = const [],
+    this.subtotal,
+    this.tax,
+    this.total,
+    this.thankYouMessage,
     this.customFields,
   });
+
+  /// Calculate subtotal from line items if not provided
+  double get calculatedSubtotal => subtotal ?? items.fold(0.0, (sum, item) => sum + item.calculatedTotal);
+  
+  /// Calculate total (subtotal + tax) if not provided
+  double get calculatedTotal => total ?? (calculatedSubtotal + (tax ?? 0.0));
+
   factory ReceiptData.fromJson(Map<String, dynamic> json) {
     return ReceiptData(
       storeName: json['storeName'] ?? '',
       storeAddress: json['storeAddress'] ?? '',
-      cashierName: json['cashierName'] ?? '',
-      laneNumber: json['laneNumber'] ?? '',
+      storePhone: json['storePhone'],
+      receiptNumber: json['receiptNumber'],
+      transactionDate: json['transactionDate'] != null 
+          ? DateTime.tryParse(json['transactionDate'])
+          : null,
+      cashierName: json['cashierName'],
+      laneNumber: json['laneNumber'],
       items: (json['items'] as List<dynamic>?)
-          ?.map((item) => ReceiptQuantityItemPrice.fromJson(item))
-          .toList(),
-      thankYouMessage: json['thankYouMessage'] ?? '',
+          ?.map((item) => ReceiptLineItem.fromJson(item))
+          .toList() ?? [],
+      subtotal: json['subtotal']?.toDouble(),
+      tax: json['tax']?.toDouble(),
+      total: json['total']?.toDouble(),
+      thankYouMessage: json['thankYouMessage'],
       customFields: json['customFields']?.cast<String, dynamic>(),
     );
   }
+
   Map<String, dynamic> toJson() {
     return {
       'storeName': storeName,
       'storeAddress': storeAddress,
-      'cashierName': cashierName,
-      'laneNumber': laneNumber,
-      if (items != null)
-        'items': items!.map((item) => item.toJson()).toList(),
-      'thankYouMessage': thankYouMessage,
+      if (storePhone != null) 'storePhone': storePhone,
+      if (receiptNumber != null) 'receiptNumber': receiptNumber,
+      if (transactionDate != null) 'transactionDate': transactionDate!.toIso8601String(),
+      if (cashierName != null) 'cashierName': cashierName,
+      if (laneNumber != null) 'laneNumber': laneNumber,
+      'items': items.map((item) => item.toJson()).toList(),
+      if (subtotal != null) 'subtotal': subtotal,
+      if (tax != null) 'tax': tax,
+      if (total != null) 'total': total,
+      if (thankYouMessage != null) 'thankYouMessage': thankYouMessage,
       if (customFields != null) 'customFields': customFields,
     };
+  }
+
+  @override
+  String toString() {
+    return 'ReceiptData(store: $storeName, items: ${items.length}, total: \$${calculatedTotal.toStringAsFixed(2)})';
   }
 }
 
