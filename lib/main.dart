@@ -655,20 +655,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
     try {
       // Use the updated T-Shirt label ZPL
-      String tShirtLabelZpl = '''
-^XA
-^CF0,27
-^FO104,150
-^FD^FS
-^CF0,25
-^FO0,90^FB433,1,0,C^FD$colorSize^FS
-^BY2,3,50
-^FO$barcodeX,124^BCN^FD$scancode^FS
-^CF0,38
-^FO0,52^FB433,1,0,C^FD$price^FS
-^CF0,38
-^FO0,14^FB433,1,0,C^FD$productName^FS
-^XZ''';
+      String tShirtLabelZpl = _generateLabelZP(386, 212).toString();
       
       // Print labels based on quantity
       for (int i = 0; i < _labelQuantity; i++) {
@@ -854,28 +841,34 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
   // Generate label ZPL with given width and height -- assuming hardcoded fields for simplicity
-  Future<void> _generateLabelZP(width, height) async {
-
+  Future<String> _generateLabelZP(width, height) async {
+    //label content
     String productName = "T-Shirt";
     String colorSize = "Small Turquoise";
     String scancode = "123456789";
     String price = "\$5.00";
     double paperWidthMM = 54.1;
-
-    int scancodeLength = scancode.length;
-    // Calculate barcode position
+    //paper details
     int dpi = 203;
     double paperWidthInches = paperWidthMM / 25.4;
     int paperWidthDots = (paperWidthInches * dpi).round();
-
+    // Calculate barcode position
+    int scancodeLength = scancode.length;
     // Estimate barcode width for Code 128
     // Code 128: Each character takes ~11 modules + start/stop characters
     int totalBarcodeCharacters = scancodeLength + 3; // +3 for start, check, and stop characters
     int moduleWidth = 2; // from ^BY2
     int estimatedBarcodeWidth = totalBarcodeCharacters * 11 * moduleWidth;
+    int estimatedProductNameWidth = productName.length * 20; // Approx 20 dots per character at size 38
+    int estimatedColorSizeWidth = colorSize.length * 15; // Approx 15 dots per character at size 25
+    int estimatedPriceWidth = price.length * 20; // Approx 20 dots per character at size 38
+
 
     // Calculate centered X position for barcode
     int barcodeX = (paperWidthDots - estimatedBarcodeWidth) ~/ 2;
+    int productNameX = (paperWidthDots - estimatedProductNameWidth) ~/ 2;
+    int colorSizeX = (paperWidthDots - estimatedColorSizeWidth) ~/ 2;
+    int priceX = (paperWidthDots - estimatedPriceWidth) ~/ 2;
 
     // Ensure barcode doesn't go off the left edge
     barcodeX = barcodeX.clamp(0, paperWidthDots - estimatedBarcodeWidth);
@@ -886,14 +879,15 @@ class _MyHomePageState extends State<MyHomePage> {
       ^FO104,150
       ^FD^FS
       ^CF0,25
-      ^FO0,90^FB433,1,0,C^FD$colorSize^FS
+      ^FO$colorSizeX,90^FB433,1,0,C^FD$colorSize^FS
       ^BY2,3,50
       ^FO$barcodeX,124^BCN^FD$scancode^FS
       ^CF0,38
-      ^FO0,52^FB433,1,0,C^FD$price^FS
+      ^FO$priceX,52^FB433,1,0,C^FD$price^FS
       ^CF0,38
-      ^FO0,14^FB433,1,0,C^FD$productName^FS
+      ^FO$productNameX,14^FB433,1,0,C^FD$productName^FS
       ^XZ''';
+    return tShirtLabelZpl;
   }
 
   Future<void> _generateReceiptZPL() async {}
