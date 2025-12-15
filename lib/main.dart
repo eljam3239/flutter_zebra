@@ -34,6 +34,7 @@ class _MyHomePageState extends State<MyHomePage> {
   bool _isConnected = false;
   String _printerStatus = 'Unknown';
   DiscoveredPrinter? _selectedPrinter;
+  ConnectedPrinter? _connectedPrinter; // Store connected printer with dimensions
   bool _isDiscovering = false;
   int _labelQuantity = 1;
   String _macAddress = '';
@@ -506,6 +507,31 @@ class _MyHomePageState extends State<MyHomePage> {
 
       await ZebraPrinter.connect(settings);
       
+      // Auto-fetch printer dimensions after successful connection
+      try {
+        print('[Flutter] Fetching printer dimensions after connection...');
+        final dimensions = await ZebraPrinter.getPrinterDimensions();
+        
+        _connectedPrinter = ConnectedPrinter(
+          discoveredPrinter: _selectedPrinter!,
+          printWidthInDots: dimensions['printWidthInDots'],
+          labelLengthInDots: dimensions['labelLengthInDots'], 
+          dpi: dimensions['dpi'],
+          maxPrintWidthInDots: dimensions['maxPrintWidthInDots'],
+          mediaWidthInDots: dimensions['mediaWidthInDots'],
+          connectedAt: DateTime.now(),
+        );
+        
+        print('[Flutter] Connected printer dimensions: ${_connectedPrinter.toString()}');
+      } catch (dimensionError) {
+        print('[Flutter] Warning: Could not fetch printer dimensions: $dimensionError');
+        // Still create connected printer object without dimensions
+        _connectedPrinter = ConnectedPrinter(
+          discoveredPrinter: _selectedPrinter!,
+          connectedAt: DateTime.now(),
+        );
+      }
+      
       setState(() {
         _isConnected = true;
         _printerStatus = 'Connected';
@@ -534,6 +560,7 @@ class _MyHomePageState extends State<MyHomePage> {
       setState(() {
         _isConnected = false;
         _printerStatus = 'Disconnected';
+        _connectedPrinter = null; // Clear connected printer data
       });
 
       if (!mounted) return;
@@ -654,8 +681,20 @@ class _MyHomePageState extends State<MyHomePage> {
 
 
     try {
-      // Use the updated T-Shirt label ZPL with dynamic dimensions
-      String tShirtLabelZpl = await _generateLabelZPL(386, 212);
+      // Check if we have connected printer with dimensions
+      if (_connectedPrinter == null) {
+        throw Exception('No connected printer information available');
+      }
+      
+      // Use actual detected dimensions, with fallbacks
+      final width = _connectedPrinter!.printWidthInDots ?? 386; // fallback to ZD410 width
+      final height = _connectedPrinter!.labelLengthInDots ?? 212; // fallback to common label height
+      final dpi = _connectedPrinter!.dpi ?? 203; // fallback to common Zebra DPI
+      
+      print('[Flutter] Using printer dimensions: ${width}x${height} @ ${dpi}dpi');
+      
+      // Generate ZPL with actual printer dimensions and DPI
+      String tShirtLabelZpl = await _generateLabelZPL(width, height, dpi);
       
       // Print labels based on quantity
       for (int i = 0; i < _labelQuantity; i++) {
@@ -841,15 +880,15 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
   // Generate label ZPL with given width and height -- assuming hardcoded fields for simplicity
-  Future<String> _generateLabelZPL(int width, int height) async {
+  Future<String> _generateLabelZPL(int width, int height, int dpi) async {
     //label content
     String productName = "T-Shirt";
     String colorSize = "Small Turquoise";
     String scancode = "123456789";
     String price = "\$5.00";
     double paperWidthMM = 54.1;
-    //paper details
-    int dpi = 203;
+    //paper details - use actual detected DPI instead of hardcoded value
+    // int dpi = 203; // removed - now passed as parameter
     // double paperWidthInches = paperWidthMM / 25.4;
     // int paperWidthDots = (paperWidthInches * dpi).round();
     int paperWidthDots = width; // use provided width in dots

@@ -56,6 +56,50 @@ class DiscoveredPrinter {
   int get hashCode => address.hashCode ^ interfaceType.hashCode;
 }
 
+/// Represents a connected printer with its discovered info plus dimensions
+class ConnectedPrinter {
+  final DiscoveredPrinter discoveredPrinter;
+  final int? printWidthInDots;
+  final int? labelLengthInDots;
+  final int? dpi;
+  final int? maxPrintWidthInDots;
+  final int? mediaWidthInDots;
+  final DateTime connectedAt;
+
+  const ConnectedPrinter({
+    required this.discoveredPrinter,
+    this.printWidthInDots,
+    this.labelLengthInDots,
+    this.dpi,
+    this.maxPrintWidthInDots,
+    this.mediaWidthInDots,
+    required this.connectedAt,
+  });
+
+  // Convenience getters to access discovered printer properties
+  String get address => discoveredPrinter.address;
+  int get port => discoveredPrinter.port;
+  String? get friendlyName => discoveredPrinter.friendlyName;
+  String? get serialNumber => discoveredPrinter.serialNumber;
+  String get interfaceType => discoveredPrinter.interfaceType;
+  Map<String, dynamic>? get additionalInfo => discoveredPrinter.additionalInfo;
+
+  @override
+  String toString() {
+    return 'ConnectedPrinter(${discoveredPrinter.toString()}, ${printWidthInDots}x${labelLengthInDots}@${dpi}dpi)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    if (other is! ConnectedPrinter) return false;
+    return discoveredPrinter == other.discoveredPrinter;
+  }
+
+  @override
+  int get hashCode => discoveredPrinter.hashCode;
+}
+
 /// Data models for zebra printer platform interface
 class PrinterStatus {
   final bool isOnline;
