@@ -906,6 +906,22 @@ class _MyHomePageState extends State<MyHomePage> {
     // double paperWidthInches = paperWidthMM / 25.4;
     // int paperWidthDots = (paperWidthInches * dpi).round();
     int paperWidthDots = width; // use provided width in dots
+    
+    // Helper function to get character width in dots based on font size and DPI
+    int getCharWidthInDots(int fontSize, int dpi) {
+      // Based on empirical testing and Zebra font matrices
+      // Using a more conservative estimate that matches actual rendering
+      // Base character width scales roughly with font size
+      
+      if (fontSize <= 25) {
+        return 10; // For smaller fonts like size 25
+      } else if (fontSize <= 38) {
+        return 20; // For medium fonts like size 38
+      } else {
+        return (fontSize * 0.5).round(); // For larger fonts, scale proportionally
+      }
+    }
+    
     // Calculate barcode position
     int scancodeLength = scancode.length;
     // Estimate barcode width for Code 128
@@ -913,9 +929,18 @@ class _MyHomePageState extends State<MyHomePage> {
     int totalBarcodeCharacters = scancodeLength + 3; // +3 for start, check, and stop characters
     int moduleWidth = 2; // from ^BY2
     int estimatedBarcodeWidth = totalBarcodeCharacters * 11 * moduleWidth;
-    int estimatedProductNameWidth = productName.length * 20; // Approx 20 dots per character at size 38
-    int estimatedColorSizeWidth = colorSize.length * 10; // Approx 15 dots per character at size 25
-    int estimatedPriceWidth = price.length * 20; // Approx 20 dots per character at size 38
+    
+    // Calculate text widths using font size and DPI
+    int productNameCharWidth = getCharWidthInDots(38, dpi);
+    int colorSizeCharWidth = getCharWidthInDots(25, dpi);
+    int priceCharWidth = getCharWidthInDots(38, dpi);
+    
+    int estimatedProductNameWidth = productName.length * productNameCharWidth;
+    int estimatedColorSizeWidth = colorSize.length * colorSizeCharWidth;
+    int estimatedPriceWidth = price.length * priceCharWidth;
+
+    print('[Flutter] Font calculations - DPI: $dpi, Font 38: ${productNameCharWidth}dots/char, Font 25: ${colorSizeCharWidth}dots/char');
+    print('[Flutter] Text widths - ProductName: ${estimatedProductNameWidth}dots, ColorSize: ${estimatedColorSizeWidth}dots, Price: ${estimatedPriceWidth}dots');
 
 
     // Calculate centered X position for barcode
