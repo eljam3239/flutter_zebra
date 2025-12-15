@@ -1968,13 +1968,25 @@ public class ZebraPrinterAndroidPlugin implements FlutterPlugin, MethodCallHandl
                     }
                 }
                 
-                String dpi = getSgdValue("device.resolution");
+                // Get printer DPI using head resolution
+                String dpi = getSgdValue("head.resolution.in_dpi");
                 if (dpi != null && !dpi.isEmpty()) {
                     try {
                         dimensions.put("dpi", Integer.parseInt(dpi));
                         Log.d(TAG, "Printer DPI: " + dpi);
                     } catch (NumberFormatException e) {
                         Log.d(TAG, "Invalid DPI value: " + dpi);
+                    }
+                } else {
+                    // Fallback to device.resolution
+                    String fallbackDpi = getSgdValue("device.resolution");
+                    if (fallbackDpi != null && !fallbackDpi.isEmpty()) {
+                        try {
+                            dimensions.put("dpi", Integer.parseInt(fallbackDpi));
+                            Log.d(TAG, "Fallback DPI: " + fallbackDpi);
+                        } catch (NumberFormatException e) {
+                            Log.d(TAG, "Invalid fallback DPI value: " + fallbackDpi);
+                        }
                     }
                 }
                 

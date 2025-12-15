@@ -97,11 +97,17 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void _clearDiscoveries() {
+    // Force disconnect if connected when clearing discoveries
+    if (_isConnected) {
+      _disconnectFromPrinter();
+    }
+    
     setState(() {
       _discoveredPrinters.clear();
       _selectedPrinter = null;
       _isConnected = false;
       _printerStatus = 'Unknown';
+      _connectedPrinter = null;
     });
     
     ScaffoldMessenger.of(context).showSnackBar(
@@ -524,18 +530,26 @@ class _MyHomePageState extends State<MyHomePage> {
     }
 
     try {
-      // Disconnect from current printer if connected to a different one
+      // Force disconnect from current printer if connected, with additional cleanup
       if (_isConnected) {
-        print('[Flutter] Disconnecting from current printer before connecting to new one...');
+        print('[Flutter] Force disconnecting from current printer before connecting to new one...');
         try {
           await ZebraPrinter.disconnect();
+          // Add a small delay to ensure cleanup completes
+          await Future.delayed(const Duration(milliseconds: 500));
           setState(() {
             _isConnected = false;
             _printerStatus = 'Disconnected';
+            _connectedPrinter = null;
           });
         } catch (e) {
           print('[Flutter] Error disconnecting from current printer: $e');
-          // Continue with connection attempt anyway
+          // Force reset state even if disconnect failed
+          setState(() {
+            _isConnected = false;
+            _printerStatus = 'Disconnected';
+            _connectedPrinter = null;
+          });
         }
       }
       
@@ -543,10 +557,13 @@ class _MyHomePageState extends State<MyHomePage> {
       ZebraInterfaceType interfaceType;
       if (_selectedPrinter!.interfaceType == 'bluetooth') {
         interfaceType = ZebraInterfaceType.bluetooth;
+        print('[Flutter] Connecting via Bluetooth to ${_selectedPrinter!.address}');
       } else if (_selectedPrinter!.interfaceType == 'usb') {
         interfaceType = ZebraInterfaceType.usb;
+        print('[Flutter] Connecting via USB to ${_selectedPrinter!.address}');
       } else {
         interfaceType = ZebraInterfaceType.tcp;
+        print('[Flutter] Connecting via TCP to ${_selectedPrinter!.address}');
       }
       
       final settings = ZebraConnectionSettings(
@@ -555,7 +572,9 @@ class _MyHomePageState extends State<MyHomePage> {
         timeout: 15000,
       );
 
+      print('[Flutter] Attempting connection with settings: ${settings.toString()}');
       await ZebraPrinter.connect(settings);
+      print('[Flutter] Connection successful');
       
       // Auto-fetch printer dimensions after successful connection
       try {
@@ -589,38 +608,72 @@ class _MyHomePageState extends State<MyHomePage> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Connected to: ${_selectedPrinter!.friendlyName ?? _selectedPrinter!.address}')),
+        SnackBar(content: Text('Connected to: ${_selectedPrinter!.friendlyName ?? _selectedPrinter!.address} [${_selectedPrinter!.interfaceType.toUpperCase()}]')),
       );
     } catch (e) {
+      print('[Flutter] Connection failed with error: $e');
       setState(() {
         _isConnected = false;
         _printerStatus = 'Connection Failed';
+        _connectedPrinter = null;
       });
 
       if (!mounted) return;
+      
+      String errorMessage = 'Connection failed: $e';
+      
+      // Provide specific guidance for common Bluetooth connection issues
+      if (e.toString().contains('socket might closed') || 
+          e.toString().contains('read failed') ||
+          e.toString().contains('read ret: -1')) {
+        errorMessage = 'Bluetooth connection failed!\n\n'
+            'This can happen when switching from TCP to Bluetooth.\n'
+            'Try:\n• Wait a few seconds and try again\n'
+            '• Turn Bluetooth off and on\n'
+            '• Restart the app if issue persists\n\n'
+            'Original error: $e';
+      }
+      
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Connection failed: $e')),
+        SnackBar(
+          content: Text(errorMessage),
+          duration: const Duration(seconds: 6),
+        ),
       );
     }
   }
 
   Future<void> _disconnectFromPrinter() async {
     try {
+      print('[Flutter] Disconnecting from printer...');
       await ZebraPrinter.disconnect();
+      
+      // Add a small delay to ensure cleanup completes
+      await Future.delayed(const Duration(milliseconds: 300));
+      
       setState(() {
         _isConnected = false;
         _printerStatus = 'Disconnected';
         _connectedPrinter = null; // Clear connected printer data
       });
 
+      print('[Flutter] Disconnection successful');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Disconnected from printer')),
       );
     } catch (e) {
+      print('[Flutter] Disconnect failed: $e');
+      // Force reset state even if disconnect failed
+      setState(() {
+        _isConnected = false;
+        _printerStatus = 'Disconnected';
+        _connectedPrinter = null;
+      });
+      
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Disconnect failed: $e')),
+        SnackBar(content: Text('Disconnect completed (with issues): $e')),
       );
     }
   }
