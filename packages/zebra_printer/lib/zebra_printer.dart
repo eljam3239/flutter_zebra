@@ -2,7 +2,7 @@ library zebra_printer;
 
 export 'package:zebra_printer_platform_interface/zebra_printer_platform_interface.dart'
     show PrinterStatus, ZebraConnectionSettings, ZebraInterfaceType, PrintJob, 
-         DiscoveredPrinter, ConnectedPrinter, ZebraPrintLanguage;
+         DiscoveredPrinter, ConnectedPrinter, LabelData, ZebraPrintLanguage;
 
 import 'package:zebra_printer_platform_interface/zebra_printer_platform_interface.dart';
 

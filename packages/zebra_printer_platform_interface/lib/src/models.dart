@@ -1,5 +1,47 @@
 /// Data models for zebra printer platform interface
 
+/// Data model for label content
+class LabelData {
+  final String productName;
+  final String colorSize;
+  final String scancode;
+  final String price;
+  final Map<String, dynamic>? customFields; // For future extensibility
+
+  const LabelData({
+    required this.productName,
+    required this.colorSize,
+    required this.scancode,
+    required this.price,
+    this.customFields,
+  });
+
+  factory LabelData.fromJson(Map<String, dynamic> json) {
+    return LabelData(
+      productName: json['productName'] ?? '',
+      colorSize: json['colorSize'] ?? '',
+      scancode: json['scancode'] ?? '',
+      price: json['price'] ?? '',
+      customFields: json['customFields']?.cast<String, dynamic>(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'productName': productName,
+      'colorSize': colorSize,
+      'scancode': scancode,
+      'price': price,
+      if (customFields != null) 'customFields': customFields,
+    };
+  }
+
+  @override
+  String toString() {
+    return 'LabelData(product: $productName, size: $colorSize, code: $scancode, price: $price)';
+  }
+}
+
 /// Represents a discovered Zebra printer
 class DiscoveredPrinter {
   final String address;
