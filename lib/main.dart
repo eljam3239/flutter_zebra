@@ -1171,11 +1171,25 @@ class _MyHomePageState extends State<MyHomePage> {
       yPosition += 56; // Move down for next item
     }
 
-    // Add bottom line
-    receiptZpl += '''
-^FO44,778^GB554,1,2,B,0^FS''';
+    // Calculate positions for bottom elements after line items
+    int bottomLineY = yPosition + 20; // Add some spacing after last item
+    int totalY = bottomLineY + 22; // Add spacing after bottom line
+    int thankYouY = totalY + 54; // Add spacing after total
+    
+    // Calculate minimum required height for the receipt
+    int minRequiredHeight = thankYouY + 60; // Add bottom margin
+    
+    // Use the larger of the detected height or minimum required height
+    int actualReceiptHeight = height > minRequiredHeight ? height : minRequiredHeight;
+    
+    print('[Flutter] Receipt layout - Last item Y: $yPosition, Total Y: $totalY, Thank you Y: $thankYouY');
+    print('[Flutter] Receipt height - Detected: $height, Required: $minRequiredHeight, Using: $actualReceiptHeight');
 
-    // Add total using the correct getter (centered)
+    // Add bottom line at dynamic position
+    receiptZpl += '''
+^FO44,$bottomLineY^GB554,1,2,B,0^FS''';
+
+    // Add total using the correct getter (centered) at dynamic position
     final total = receiptData.calculatedTotal;
     int totalCharWidth = getCharWidthInDots(35, dpi);
     String totalText = "Total: \$${total.toStringAsFixed(2)}";
@@ -1185,10 +1199,10 @@ class _MyHomePageState extends State<MyHomePage> {
     
     receiptZpl += '''
 ^CF0,35
-^FO$totalX,800
+^FO$totalX,$totalY
 ^FD$totalText^FS''';
 
-    // Add thank you message (centered)
+    // Add thank you message (centered) at dynamic position
     String thankYouMsg = receiptData.thankYouMessage ?? 'Thank you for shopping with us!';
     int thankYouCharWidth = getCharWidthInDots(30, dpi);
     int estimatedThankYouWidth = thankYouMsg.length * thankYouCharWidth;
@@ -1197,8 +1211,18 @@ class _MyHomePageState extends State<MyHomePage> {
     
     receiptZpl += '''
 ^CF0,30
-^FO$thankYouX,834
-^FD$thankYouMsg^FS
+^FO$thankYouX,$thankYouY
+^FD$thankYouMsg^FS''';
+
+    // Set the label length to accommodate the full receipt if needed
+    if (actualReceiptHeight > height) {
+      receiptZpl = '''
+^XA
+^LL$actualReceiptHeight
+''' + receiptZpl.substring(4); // Replace ^XA with ^XA^LL command
+    }
+    
+    receiptZpl += '''
 ^XZ''';
 
     return receiptZpl;
