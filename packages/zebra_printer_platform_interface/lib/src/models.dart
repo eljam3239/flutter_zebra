@@ -42,6 +42,43 @@ class LabelData {
   }
 }
 
+class ReceiptData {
+  final String storeName;
+  final String storeAddress;
+  final String cashierName;
+  final String laneNumber;
+  final String thankYouMessage;
+  final Map<String, dynamic>? customFields; // For future extensibility
+  const ReceiptData({
+    required this.storeName,
+    required this.storeAddress,
+    required this.cashierName,
+    required this.laneNumber,
+    required this.thankYouMessage,
+    this.customFields,
+  });
+  factory ReceiptData.fromJson(Map<String, dynamic> json) {
+    return ReceiptData(
+      storeName: json['storeName'] ?? '',
+      storeAddress: json['storeAddress'] ?? '',
+      cashierName: json['cashierName'] ?? '',
+      laneNumber: json['laneNumber'] ?? '',
+      thankYouMessage: json['thankYouMessage'] ?? '',
+      customFields: json['customFields']?.cast<String, dynamic>(),
+    );
+  }
+  Map<String, dynamic> toJson() {
+    return {
+      'storeName': storeName,
+      'storeAddress': storeAddress,
+      'cashierName': cashierName,
+      'laneNumber': laneNumber,
+      'thankYouMessage': thankYouMessage,
+      if (customFields != null) 'customFields': customFields,
+    };
+  }
+}
+
 /// Represents a discovered Zebra printer
 class DiscoveredPrinter {
   final String address;

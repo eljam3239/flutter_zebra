@@ -978,7 +978,7 @@ class _MyHomePageState extends State<MyHomePage> {
     return labelZpl;
   }
 
-  Future<String> _generateReceiptZPL(int width, int height, int dp, ) async {
+  Future<String> _generateReceiptZPL(int width, int height, int dpi, ReceiptData receiptData) async {
     String storeName = "Test Store";
     String storeAddress = "100 LeBron St, Cleveland, OH";
     String cashierName = "Eli";
