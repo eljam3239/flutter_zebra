@@ -870,6 +870,20 @@ class _MyHomePageState extends State<MyHomePage> {
         SnackBar(content: Text('Set dimensions: ${width}" x ${height}" ($widthInDots x $heightInDots dots)')),
       );
       
+      // Update the connected printer object with new dimensions
+      if (_connectedPrinter != null) {
+        _connectedPrinter = ConnectedPrinter(
+          discoveredPrinter: _connectedPrinter!.discoveredPrinter,
+          printWidthInDots: widthInDots,
+          labelLengthInDots: heightInDots,
+          dpi: _connectedPrinter!.dpi ?? dpi, // Keep existing DPI or use current
+          maxPrintWidthInDots: _connectedPrinter!.maxPrintWidthInDots,
+          mediaWidthInDots: _connectedPrinter!.mediaWidthInDots,
+          connectedAt: _connectedPrinter!.connectedAt,
+        );
+        print('[Flutter] Updated connected printer dimensions: ${_connectedPrinter.toString()}');
+      }
+      
       print('[Flutter] Successfully set printer width');
     } catch (e) {
       print('[Flutter] Failed to set printer dimensions: $e');
@@ -912,6 +926,8 @@ class _MyHomePageState extends State<MyHomePage> {
 
     // Ensure barcode doesn't go off the left edge
     barcodeX = barcodeX.clamp(0, paperWidthDots - estimatedBarcodeWidth);
+    
+    print('[Flutter] Label positions - ProductName: ($productNameX,14), Price: ($priceX,52), ColorSize: ($colorSizeX,90), Barcode: ($barcodeX,124)');
 
     String tShirtLabelZpl = '''
       ^XA
